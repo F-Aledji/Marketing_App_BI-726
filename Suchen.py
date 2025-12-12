@@ -1,196 +1,131 @@
+"""
+WS Bestellnummer Suche - Hauptanwendung (UI)
+Extrahiert und validiert Artikelnummern aus PDF-Dokumenten.
+"""
 import streamlit as st
-import pdfplumber
-import fitz  # PyMuPDF
-import re
-import pandas as pd
-import io
 import warnings
-import os
 
-# Utils importieren (Verbindung zum "Gehirn")
-from utils import render_sidebar, load_blacklist_config
+# Core-Module importieren
+from core.config import get_column_config
+from core.extractors import analyze_pdf
+from core.analyzers import check_ocr_quality
+from core.exporters import export_to_excel
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="WS Jäger", page_icon="🎯", layout="wide")
 
-# Sidebar laden
-render_sidebar()
-
-# --- KONFIGURATION LADEN ---
-# Hier laden wir die "Single Source of Truth" beim Start
-config = load_blacklist_config()
-
-BAD_PREFIXES = config.get("bad_prefixes", [])
-BAD_NUMBERS = config.get("bad_numbers", [])
-
-# Regex Pattern
-pattern_alpha = r"(?<![A-Z])([A-Z]{2,4})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})(?!\d)"
-pattern_numeric = r"(?<!\d)(\d{2})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})(?!\d)"
-pattern = rf"(?i)(?:{pattern_alpha})|(?:{pattern_numeric})"
-
-# --- HILFSFUNKTIONEN ---
-
-def extract_match_groups(match_tuple):
-    if match_tuple[0]: return match_tuple[0], match_tuple[1], match_tuple[2]
-    else: return match_tuple[3], match_tuple[4], match_tuple[5]
-
-def normalize(p1, p2, p3): return f"{p1} {p2} {p3}"
-def get_clean_string(p1, p2, p3): return f"{p1}{p2}{p3}"
-
-def check_plausibility(match_tuple):
-    """
-    Prüft gegen Logik UND gegen die geladene JSON-Blacklist.
-    """
-    p1, p2, p3 = match_tuple
-    p1_upper = p1.upper()
-    
-    # 1. Hard-Checks (Telefon, Jahr)
-    if p1.startswith("0"): return False
-    if p1 in ["2023", "2024", "2025", "2026"]: return False
-    
-    # 2. JSON CHECK: Bad Numbers (Exakte Matches)
-    clean_num = get_clean_string(p1, p2, p3)
-    if clean_num in BAD_NUMBERS: 
-        return False
-    
-    # 3. JSON CHECK: Bad Prefixes (Startet mit...)
-    # Löst das "CK21" Problem: Wenn CK gesperrt ist, fliegt CK21 raus.
-    for bad_prefix in BAD_PREFIXES:
-        if p1_upper.startswith(bad_prefix):
-            return False
-            
-    return True
-
-# --- EXTRAKTOREN ---
-@st.cache_data
-def analyze_pdf(uploaded_file):
-    bytes_data = uploaded_file.getvalue()
-    results = []
-    
-    # 1. PyMuPDF (Fitz)
-    try:
-        doc = fitz.open(stream=bytes_data, filetype="pdf")
-        for i, page in enumerate(doc):
-            text = "" 
-            text += page.get_text() + " "
-            blocks = page.get_text("blocks")
-            for block in blocks:
-                if len(block) >= 5:
-                    if isinstance(block[4], str): text += " " + block[4]
-            try:
-                text_dict = page.get_text("dict")
-                for block in text_dict.get("blocks", []):
-                    for line in block.get("lines", []):
-                        for span in line.get("spans", []):
-                            text += " " + span.get("text", "")
-            except: pass
-            
-            if text and len(text.strip()) > 5:
-                for m in re.findall(pattern, text):
-                    p1, p2, p3 = extract_match_groups(m)
-                    if check_plausibility((p1, p2, p3)):
-                        results.append({
-                            "Nummer": normalize(p1, p2, p3),
-                            "Clean": get_clean_string(p1, p2, p3),
-                            "Seite": i + 1, "Quelle": "PyMuPDF"
-                        })
-    except Exception as e:
-        st.error(f"⚠️ PyMuPDF Fehler: {e}")
-
-    # 2. pdfplumber
-    try:
-        with pdfplumber.open(io.BytesIO(bytes_data)) as pdf:
-            for i, page in enumerate(pdf.pages):
-                try:
-                    text = page.extract_text() or ""
-                    tables = page.extract_tables()
-                    for table in tables:
-                        for row in table:
-                            for cell in row:
-                                if cell: text += " " + str(cell)
-                    
-                    if text and len(text.strip()) > 10:
-                        for m in re.findall(pattern, text):
-                            p1, p2, p3 = extract_match_groups(m)
-                            if check_plausibility((p1, p2, p3)):
-                                results.append({
-                                    "Nummer": normalize(p1, p2, p3),
-                                    "Clean": get_clean_string(p1, p2, p3),
-                                    "Seite": i + 1, "Quelle": "pdfplumber"
-                                })
-                except: continue
-    except Exception as e:
-        if "stroke color" not in str(e).lower():
-            st.error(f"⚠️ pdfplumber Fehler: {e}")
-
-    # --- DEDUPLIZIERUNG & STATUS ---
-    if not results: return pd.DataFrame()
-
-    seen = set()
-    final_data = []
-    
-    # Zählen für Spam-Erkennung
-    all_cleans = [x["Clean"] for x in results]
-    from collections import Counter
-    counts = Counter(all_cleans)
-
-    # Cross-Match Sets
-    plumber_set = {x["Clean"] for x in results if x["Quelle"] == "pdfplumber"}
-    fitz_set = {x["Clean"] for x in results if x["Quelle"] == "PyMuPDF"}
-
-    for item in results:
-        key = (item["Clean"], item["Seite"])
-        if key in seen: continue
-        seen.add(key)
-        
-        status = "Unsicher"
-        if counts[item["Clean"]] > 10: status = "Löschkandidat"
-        elif item["Clean"] in plumber_set and item["Clean"] in fitz_set: status = "Sicher"
-        
-        final_data.append({
-            "Seite": item["Seite"],
-            "Artikelnummer": item["Nummer"],
-            "Status": status
-        })
-
-    df = pd.DataFrame(final_data)
-    if not df.empty:
-        df = df.sort_values(by=["Status", "Seite", "Artikelnummer"])
-    return df
-
 # --- UI START ---
-st.title("WS Bestellnummer Suche")
-st.markdown(f"**System Status:** {len(BAD_PREFIXES)} Filter-Regeln | {len(BAD_NUMBERS)} gesperrte Nummern geladen.")
+st.title("🎯 WS Bestellnummer Suche")
 
 uploaded_file = st.file_uploader("PDF hier reinziehen", type=["pdf"])
 
 if uploaded_file:
     # Button Start
-    if st.button("Suche starten"):
+    if st.button("🔍 Suche starten", type="primary"):
         with st.spinner("Suche läuft..."):
-            df = analyze_pdf(uploaded_file)
+            bytes_data = uploaded_file.getvalue()
             
-            # Session State speichern
-            st.session_state["analyse_ergebnis"] = df
+            # OCR-Qualitätsprüfung (nur beim Starten, nicht beim Upload)
+            if check_ocr_quality(bytes_data):
+                st.warning("⚠️ **Achtung:** Diese Datei scheint gescannt zu sein (wenig extrahierbarer Text). Die Ergebnisse könnten unvollständig sein.")
+            
+            df_sicher, df_unsicher, df_spam = analyze_pdf(uploaded_file)
+            
+            # Session State speichern (nur nach Analyse!)
+            st.session_state["data_sicher"] = df_sicher
+            st.session_state["data_unsicher"] = df_unsicher
+            st.session_state["data_spam"] = df_spam
             st.session_state["datei_name"] = uploaded_file.name
+            st.session_state["analyse_done"] = True
             
-            if df.empty:
+            total = len(df_sicher) + len(df_unsicher) + len(df_spam)
+            if total == 0:
                 st.warning("Nichts gefunden.")
             else:
-                st.success(f"{len(df)} Treffer gefunden!")
-                
-                # Metrics
-                c1, c2, c3 = st.columns(3)
-                c1.metric("✅ Sicher", len(df[df['Status']=='Sicher']))
-                c2.metric("⚠️ Unsicher", len(df[df['Status']=='Unsicher']))
-                c3.metric("❌ Spam", len(df[df['Status'].str.contains("Löschkandidat")]))
-                
-                st.dataframe(df, width='stretch')
-                
-                # Excel
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, index=False)
-                
-                st.download_button("💾 Excel Download", buffer.getvalue(), f"{uploaded_file.name}.xlsx")
+                st.success(f"✅ {total} Treffer gefunden!")
+
+# --- 3-TAB COCKPIT ---
+if st.session_state.get("analyse_done", False):
+    st.divider()
+    
+    # Metrics Übersicht
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("🟢 Sicher", len(st.session_state.get("data_sicher", [])))
+    with col2:
+        st.metric("🟡 Unsicher", len(st.session_state.get("data_unsicher", [])))
+    with col3:
+        st.metric("🔴 Spam", len(st.session_state.get("data_spam", [])))
+    
+    # Column Config laden
+    column_config = get_column_config()
+    
+    # Tabs
+    tab1, tab2, tab3 = st.tabs(["🟢 Sicher", "🟡 Unsicher", "🔴 Spam"])
+    
+    # --- TAB 1: SICHER ---
+    with tab1:
+        st.subheader("Sichere Treffer")
+        st.caption("Diese Nummern wurden von beiden Engines gefunden und haben keinen verdächtigen Kontext.")
+        
+        if not st.session_state["data_sicher"].empty:
+            st.dataframe(
+                st.session_state["data_sicher"],
+                use_container_width=True,
+                hide_index=True,
+                column_config=column_config
+            )
+        else:
+            st.info("Keine sicheren Treffer gefunden.")
+    
+    # --- TAB 2: UNSICHER ---
+    with tab2:
+        st.subheader("Unsichere Treffer")
+        st.caption("Diese Nummern wurden nur von einer Engine gefunden. Bitte manuell prüfen.")
+        
+        if not st.session_state["data_unsicher"].empty:
+            st.dataframe(
+                st.session_state["data_unsicher"],
+                use_container_width=True,
+                hide_index=True,
+                column_config=column_config
+            )
+        else:
+            st.info("Keine unsicheren Treffer gefunden.")
+    
+    # --- TAB 3: SPAM ---
+    with tab3:
+        st.subheader("Spam / Falsch-Positive")
+        st.caption("Diese Nummern wurden als Spam erkannt (Telefonnummern, HRB-Nummern, etc.).")
+        
+        if not st.session_state["data_spam"].empty:
+            st.dataframe(
+                st.session_state["data_spam"],
+                use_container_width=True,
+                hide_index=True,
+                column_config=column_config
+            )
+        else:
+            st.info("Keine Spam-Treffer gefunden.")
+    
+    # --- EXPORT ---
+    st.divider()
+    st.subheader("📥 Export")
+    
+    excel_data = export_to_excel(
+        st.session_state["data_sicher"],
+        st.session_state["data_unsicher"],
+        st.session_state["data_spam"],
+        st.session_state.get("datei_name", "export")
+    )
+    
+    col_exp1, col_exp2 = st.columns([1, 3])
+    with col_exp1:
+        st.download_button(
+            "💾 Excel Download (Alle)", 
+            excel_data, 
+            f"{st.session_state.get('datei_name', 'export')}_ergebnisse.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )

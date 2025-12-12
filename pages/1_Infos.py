@@ -2,10 +2,7 @@ import streamlit as st
 import sys, os
 sys.path.append(os.path.abspath('.'))
 
-from utils import render_sidebar
-
 st.set_page_config(page_title="Infos", page_icon="ℹ️", layout="wide")
-render_sidebar()
 
 # --- INHALT ---
 st.title("ℹ️ Infos")
