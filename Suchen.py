@@ -160,15 +160,15 @@ def analyze_pdf(uploaded_file):
     return df
 
 # --- UI START ---
-st.title("WS Bestellnummer Jäger 🎯")
+st.title("WS Bestellnummer Suche")
 st.markdown(f"**System Status:** {len(BAD_PREFIXES)} Filter-Regeln | {len(BAD_NUMBERS)} gesperrte Nummern geladen.")
 
 uploaded_file = st.file_uploader("PDF hier reinziehen", type=["pdf"])
 
 if uploaded_file:
     # Button Start
-    if st.button("🚀 Analyse starten"):
-        with st.spinner("Scanner läuft..."):
+    if st.button("Suche starten"):
+        with st.spinner("Suche läuft..."):
             df = analyze_pdf(uploaded_file)
             
             # Session State speichern
@@ -186,7 +186,7 @@ if uploaded_file:
                 c2.metric("⚠️ Unsicher", len(df[df['Status']=='Unsicher']))
                 c3.metric("❌ Spam", len(df[df['Status'].str.contains("Löschkandidat")]))
                 
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df, width='stretch')
                 
                 # Excel
                 buffer = io.BytesIO()

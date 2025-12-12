@@ -1,0 +1,17 @@
+{
+  "bad_prefixes": [
+    "TEL", "FAX", "MOB", "HRB", "UST", "BLZ", "IBAN", "SEITE", 
+    "BLAU", "ROT", "GELB", "GRÜN", "GRAU", "WEISS", "SCHWARZ",
+    "SET", "STK", "STCK", "PAAR", "BOX", "DOSE", "PACK", 
+    "MM", "CM", "M", "KG", "G", "LITER", "WATT", "VOLT", "BAR",
+    "EUR", "EURO", "CHF", "USD",
+    "JAN", "FEB", "MÄRZ", "APR", "MAI", "JUN", "JUNI", "JUL", "JULI", "AUG", "SEPT", "OKT", "NOV", "DEZ", 
+    "VON", "BIS", "MIT", "OHNE", "UND", "ODER", 
+    "TYP", "MOD", "ART", "NR", "CK", "KW", "VPE"
+  ],
+  "bad_numbers": [
+    "4499774433", 
+    "9988992211", 
+    "9988992299"
+  ]
+}

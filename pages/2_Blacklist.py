@@ -1,137 +1,58 @@
 import streamlit as st
-import pandas as pd
-from datetime import datetime
+import sys, os
+# Damit Python die utils.py im Hauptordner findet:
+sys.path.append(os.path.abspath('.'))
 
-st.set_page_config(page_title="Blacklist", page_icon="🚫", layout="wide")
+from utils import render_sidebar, load_blacklist_config, save_blacklist_config, log_change
 
-# --- SIDEBAR ---
-with st.sidebar:
-    st.image("https://via.placeholder.com/150x50?text=LOGO", use_container_width=True)
-    st.markdown("---")
-    st.markdown("[🔗 Externer Link (Platzhalter)](https://example.com)")
+st.set_page_config(page_title="Blacklist", page_icon="🚫")
+render_sidebar()
 
-# --- SESSION WARNUNG ---
-st.warning("⚠️ **Hinweis:** Wenn Sie die Hauptseite verlassen, wird die aktuelle Session zurückgesetzt. Analyseergebnisse gehen verloren, falls nicht gespeichert!")
+st.title("🚫 Filter Verwaltung")
 
-# --- INITIALISIERUNG ---
-if "blacklist" not in st.session_state:
-    st.session_state["blacklist"] = []
+# 1. Config laden
+config = load_blacklist_config()
 
-if "audit_log" not in st.session_state:
-    st.session_state["audit_log"] = []
+tab1, tab2 = st.tabs(["🔤 Prefixe (Wörter)", "🔢 Ganze Nummern"])
 
-# --- HILFSFUNKTION: AUDIT LOG EINTRAG ---
-def add_audit_entry(benutzer: str, aktion: str, artikelnummer: str, begruendung: str):
-    """Fügt einen Eintrag zum Audit-Log hinzu."""
-    st.session_state["audit_log"].append({
-        "Zeitstempel": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "Benutzer": benutzer,
-        "Aktion": aktion,
-        "Artikelnummer": artikelnummer,
-        "Begründung": begruendung
-    })
-
-# --- INHALT ---
-st.title("🚫 Blacklist")
-st.markdown("---")
-
-st.markdown("## Gesperrte Artikelnummern verwalten")
-
-# --- AKTUELLE BLACKLIST ---
-st.subheader("📋 Aktuelle Blacklist")
-
-if st.session_state["blacklist"]:
-    df_blacklist = pd.DataFrame(st.session_state["blacklist"])
-    st.dataframe(df_blacklist, use_container_width=True, hide_index=True)
-else:
-    st.info("Keine Einträge in der Blacklist vorhanden.")
-
-st.markdown("---")
-
-# --- NEUE NUMMER HINZUFÜGEN ---
-st.subheader("➕ Nummer zur Blacklist hinzufügen")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    benutzer_name = st.text_input("👤 Ihr Name *", placeholder="z.B. Max Mustermann")
-    artikel_nummer = st.text_input("🔢 Artikelnummer *", placeholder="z.B. 62 070 97")
-
-with col2:
-    grund = st.selectbox("📌 Grund", [
-        "Falsche Erkennung",
-        "Duplikat",
-        "Veraltet/Auslaufend",
-        "Testdaten",
-        "Sonstiges"
-    ])
-    begruendung = st.text_area("📝 Begründung *", placeholder="Erklären Sie kurz, warum diese Nummer gesperrt wird...")
-
-if st.button("✅ Zur Blacklist hinzufügen", type="primary"):
-    if not benutzer_name.strip():
-        st.error("Bitte geben Sie Ihren Namen ein.")
-    elif not artikel_nummer.strip():
-        st.error("Bitte geben Sie eine Artikelnummer ein.")
-    elif not begruendung.strip():
-        st.error("Bitte geben Sie eine Begründung ein.")
-    else:
-        # Zur Blacklist hinzufügen
-        st.session_state["blacklist"].append({
-            "Artikelnummer": artikel_nummer.strip(),
-            "Grund": grund,
-            "Hinzugefügt von": benutzer_name.strip(),
-            "Datum": datetime.now().strftime("%Y-%m-%d %H:%M")
-        })
-        
-        # Audit-Log Eintrag
-        add_audit_entry(
-            benutzer=benutzer_name.strip(),
-            aktion="Hinzugefügt",
-            artikelnummer=artikel_nummer.strip(),
-            begruendung=f"{grund}: {begruendung.strip()}"
-        )
-        
-        st.success(f"✅ '{artikel_nummer}' wurde zur Blacklist hinzugefügt und im Audit-Log protokolliert.")
-        st.rerun()
-
-st.markdown("---")
-
-# --- NUMMER ENTFERNEN ---
-st.subheader("➖ Nummer von Blacklist entfernen")
-
-if st.session_state["blacklist"]:
-    nummern_liste = [item["Artikelnummer"] for item in st.session_state["blacklist"]]
+# --- TAB 1: PREFIXE ---
+with tab1:
+    st.info("Hier sperrst du Anfänge von Nummern (z.B. 'TEL', 'CK'). Alles was so anfängt, wird blockiert.")
     
+    # Anzeigen
+    st.write(f"Aktuell: {', '.join(config['bad_prefixes'])}")
+    
+    # Hinzufügen
     col1, col2 = st.columns(2)
+    new_prefix = col1.text_input("Neues Prefix", key="in_pref").upper()
+    user = col2.text_input("Dein Name", key="user1")
     
-    with col1:
-        benutzer_entfernen = st.text_input("👤 Ihr Name (für Entfernung) *", placeholder="z.B. Max Mustermann", key="remove_user")
-        nummer_entfernen = st.selectbox("Nummer auswählen", nummern_liste)
-    
-    with col2:
-        begruendung_entfernen = st.text_area("📝 Begründung für Entfernung *", placeholder="Warum wird diese Nummer entsperrt?", key="remove_reason")
-    
-    if st.button("🗑️ Von Blacklist entfernen", type="secondary"):
-        if not benutzer_entfernen.strip():
-            st.error("Bitte geben Sie Ihren Namen ein.")
-        elif not begruendung_entfernen.strip():
-            st.error("Bitte geben Sie eine Begründung ein.")
+    if st.button("Prefix sperren"):
+        if not new_prefix:
+            st.error("Bitte Prefix eingeben")
+        elif new_prefix in config['bad_prefixes']:
+            st.warning("Existiert schon!")
         else:
-            # Aus Blacklist entfernen
-            st.session_state["blacklist"] = [
-                item for item in st.session_state["blacklist"] 
-                if item["Artikelnummer"] != nummer_entfernen
-            ]
-            
-            # Audit-Log Eintrag
-            add_audit_entry(
-                benutzer=benutzer_entfernen.strip(),
-                aktion="Entfernt",
-                artikelnummer=nummer_entfernen,
-                begruendung=begruendung_entfernen.strip()
-            )
-            
-            st.success(f"✅ '{nummer_entfernen}' wurde von der Blacklist entfernt und im Audit-Log protokolliert.")
+            config['bad_prefixes'].append(new_prefix)
+            save_blacklist_config(config)
+            log_change(user, "Add Prefix", new_prefix, "Manuell via UI")
+            st.success(f"{new_prefix} gesperrt!")
             st.rerun()
-else:
-    st.info("Keine Einträge zum Entfernen vorhanden.")
+
+# --- TAB 2: GANZE NUMMERN ---
+with tab2:
+    st.info("Hier sperrst du exakte Nummern (z.B. eine Referenznummer).")
+    
+    st.dataframe(config['bad_numbers'])
+    
+    c1, c2 = st.columns(2)
+    new_num = c1.text_input("Ganze Nummer (ohne Leerzeichen)", key="in_num")
+    user2 = c2.text_input("Dein Name", key="user2")
+    
+    if st.button("Nummer sperren"):
+        if new_num and new_num not in config['bad_numbers']:
+            config['bad_numbers'].append(new_num)
+            save_blacklist_config(config)
+            log_change(user2, "Add Number", new_num, "Manuell via UI")
+            st.success("Gespeichert!")
+            st.rerun()

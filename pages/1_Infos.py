@@ -1,15 +1,11 @@
 import streamlit as st
+import sys, os
+sys.path.append(os.path.abspath('.'))
+
+from utils import render_sidebar
 
 st.set_page_config(page_title="Infos", page_icon="ℹ️", layout="wide")
-
-# --- SIDEBAR ---
-with st.sidebar:
-    st.image("https://via.placeholder.com/150x50?text=LOGO", use_container_width=True)
-    st.markdown("---")
-    st.markdown("[🔗 Externer Link (Platzhalter)](https://example.com)")
-
-# --- SESSION WARNUNG ---
-st.warning("⚠️ **Hinweis:** Wenn Sie die Hauptseite verlassen, wird die aktuelle Session zurückgesetzt. Analyseergebnisse gehen verloren, falls nicht gespeichert!")
+render_sidebar()
 
 # --- INHALT ---
 st.title("ℹ️ Infos")
