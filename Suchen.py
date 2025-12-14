@@ -14,10 +14,10 @@ from core.exporters import export_to_excel
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="WS Jäger", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="B.nr. Suche", page_icon="🎯", layout="wide")
 
 # --- UI START ---
-st.title("🎯 WS Bestellnummer Suche")
+st.title("Artikelnummer-Sucher")
 
 uploaded_file = st.file_uploader("PDF hier reinziehen", type=["pdf"])
 

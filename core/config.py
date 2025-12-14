@@ -15,7 +15,7 @@ PATTERN_ALPHA = r"(?<![A-Z])([A-Z]{2,4})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})
 PATTERN_NUMERIC = r"(?<!\d)(\d{2})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})(?!\d)"
 PATTERN = rf"(?i)(?:{PATTERN_ALPHA})|(?:{PATTERN_NUMERIC})"
 
-# Spalten-Konstanten (DRY)
+# Spalten-Konstanten 
 RESULT_COLUMNS: List[str] = ["Seite", "Artikelnummer", "Kontext"]
 
 def get_column_config() -> Dict:
