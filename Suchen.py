@@ -98,7 +98,7 @@ if st.session_state.get("analyse_done", False):
     # --- TAB 3: SPAM ---
     with tab3:
         st.subheader("Spam / Falsch-Positive")
-        st.caption("Diese Nummern wurden als Spam erkannt (Telefonnummern, HRB-Nummern, etc.).")
+        st.caption("Diese Nummern wurden als Spam erkannt (womöglich Telefonnummern, HRB-Nummern, etc.).")
         
         if not st.session_state["data_spam"].empty:
             st.dataframe(
@@ -124,7 +124,7 @@ if st.session_state.get("analyse_done", False):
     col_exp1, col_exp2 = st.columns([1, 3])
     with col_exp1:
         st.download_button(
-            "💾 Excel Download (Alle)", 
+            "💾 Tabellen in Excel downloaden", 
             excel_data, 
             f"{st.session_state.get('datei_name', 'export')}_ergebnisse.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
