@@ -1,29 +1,19 @@
-"""
-Analyse-Funktionen für Plausibilitätsprüfung und Kontext-Analyse.
-"""
+# Analyse der PDF-Inhalte nach korrekten Nummern und die extraktion des Kontexts in der nähe der Nummern
+# Der Kontext ist wichtig damit eine KI gegenprüfen kann ob die Nummer tatsächlich eine Artikelnummer ist oder z.B. eine Nummer aus verschiedenen Spalten
 import io
 import pdfplumber
 from typing import Tuple, List
-
 from core.config import get_config
 
-
+# Gibt die reine Nummer ohne Leerzeichen zurück, z.B. "AB12345" oder "1212345"
+# Aufteilung in 3 Teile nötig um die Anforderungen von Regex zu erfüllen 
 def get_clean_string(p1: str, p2: str, p3: str) -> str:
-    """Gibt die reine Nummer ohne Leerzeichen zurück."""
     return f"{p1}{p2}{p3}"
 
 
+# Prüft gegen die Filter-Logik (PATTERN_ALPHA/NUMERIC) UND gegen die geladene JSON-Blacklist
+# Gibt True zurück wenn die Nummer plausibel ist, False wenn sie gefiltert werden soll
 def check_plausibility(match_tuple: Tuple[str, str, str], config: dict = None) -> bool:
-    """
-    Prüft gegen Logik UND gegen die geladene JSON-Blacklist.
-    
-    Args:
-        match_tuple: Tuple aus (Teil1, Teil2, Teil3) der Nummer
-        config: Optional - Blacklist-Konfiguration
-    
-    Returns:
-        True wenn die Nummer plausibel ist, False wenn sie gefiltert werden soll
-    """
     if config is None:
         config = get_config()
     
@@ -51,22 +41,13 @@ def check_plausibility(match_tuple: Tuple[str, str, str], config: dict = None) -
             
     return True
 
-
+# Das ist die Kontextanalyse um zu prüfen ob die Nummer in einem "guten" oder "schlechten" Kontext steht
+# Bedeutet z.B. "Tel", "Fax" in der Nähe der Nummer sind schlechte Indikatoren
+# Während "Art", "Best" gute Indikatoren sind
+# Der Kontext ist in diesem Fall 35 Zeichen vor und nach der gefundenen Nummer
+# Args: text - der gesamte Text, match_start - Start-Position des Matches, match_end - End-Position des Matches
+# Returns: Tuple von (status - "Spam_Candidate" oder "Context_OK", context_string - der extrahierte Kontext-Text)
 def analyze_context(text: str, match_start: int, match_end: int, config: dict = None) -> Tuple[str, str]:
-    """
-    Analysiert den Kontext um einen Match herum und bestimmt den Status.
-    
-    Args:
-        text: Der gesamte Text
-        match_start: Start-Position des Matches
-        match_end: End-Position des Matches
-        config: Optional - Blacklist-Konfiguration
-    
-    Returns:
-        Tuple von (status, context_string)
-        - status: "Spam_Candidate" oder "Context_OK"
-        - context_string: Der extrahierte Kontext-Text
-    """
     if config is None:
         config = get_config()
     
@@ -106,16 +87,10 @@ def analyze_context(text: str, match_start: int, match_end: int, config: dict = 
     return "Context_OK", context
 
 
+# Prüft die ersten 3 Seiten auf OCR-Qualität/gescannte Dokumente) 
+# PDF als Bytes übergeben
 def check_ocr_quality(pdf_bytes: bytes) -> bool:
-    """
-    Prüft die ersten 3 Seiten auf OCR-Qualität (schneller Check).
-    
-    Args:
-        pdf_bytes: PDF als Bytes
-    
-    Returns:
-        True wenn Warnung angezeigt werden soll (vermutlich gescannt)
-    """
+
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             total_chars = 0

@@ -1,7 +1,4 @@
-"""
-WS Bestellnummer Suche - Hauptanwendung (UI)
-Extrahiert und validiert Artikelnummern aus PDF-Dokumenten.
-"""
+# WS Bestellnummer Suche App
 import streamlit as st
 import warnings
 
@@ -14,10 +11,10 @@ from core.exporters import export_to_excel
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="B.nr. Suche", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="WS PDF Suche", page_icon="🎯", layout="wide")
 
 # --- UI START ---
-st.title("Artikelnummer-Sucher")
+st.title("Artikelnummer-Suche App")
 
 uploaded_file = st.file_uploader("PDF hier reinziehen", type=["pdf"])
 
@@ -68,12 +65,12 @@ if st.session_state.get("analyse_done", False):
     # --- TAB 1: SICHER ---
     with tab1:
         st.subheader("Sichere Treffer")
-        st.caption("Diese Nummern wurden von beiden Engines gefunden und haben keinen verdächtigen Kontext.")
+        st.caption("Diese Nummern wurden von beiden Engines gefunden. Vereinzelnte Fehler sind dennoch möglich.")
         
         if not st.session_state["data_sicher"].empty:
             st.dataframe(
                 st.session_state["data_sicher"],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config=column_config
             )
@@ -83,12 +80,12 @@ if st.session_state.get("analyse_done", False):
     # --- TAB 2: UNSICHER ---
     with tab2:
         st.subheader("Unsichere Treffer")
-        st.caption("Diese Nummern wurden nur von einer Engine gefunden. Bitte manuell prüfen.")
+        st.caption("Diese Nummern wurden von nur einer Engine gefunden. Bitte überprüfen.")
         
         if not st.session_state["data_unsicher"].empty:
             st.dataframe(
                 st.session_state["data_unsicher"],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config=column_config
             )
@@ -98,12 +95,12 @@ if st.session_state.get("analyse_done", False):
     # --- TAB 3: SPAM ---
     with tab3:
         st.subheader("Spam / Falsch-Positive")
-        st.caption("Diese Nummern wurden als Spam erkannt (womöglich Telefonnummern, HRB-Nummern, etc.).")
+        st.caption("Diese Nummern wurden als Spam erkannt (womöglich falsche Nummern, Telefonnummern, HRB-Nummern, etc.). Bitte überprüfen.")
         
         if not st.session_state["data_spam"].empty:
             st.dataframe(
                 st.session_state["data_spam"],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config=column_config
             )
@@ -112,7 +109,7 @@ if st.session_state.get("analyse_done", False):
     
     # --- EXPORT ---
     st.divider()
-    st.subheader("📥 Export")
+    st.subheader("📥 Excel Export")
     
     excel_data = export_to_excel(
         st.session_state["data_sicher"],
@@ -124,8 +121,8 @@ if st.session_state.get("analyse_done", False):
     col_exp1, col_exp2 = st.columns([1, 3])
     with col_exp1:
         st.download_button(
-            "💾 Tabellen in Excel downloaden", 
+            "💾 Tabellen in eine Excel herunterladen", 
             excel_data, 
-            f"{st.session_state.get('datei_name', 'export')}_ergebnisse.xlsx",
+            f"{st.session_state.get('datei_name', 'export')}_extraktion.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )

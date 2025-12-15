@@ -1,30 +1,16 @@
-"""
-Export-Funktionen für verschiedene Formate.
-"""
+# Exporter-Modul für Excel-Dateien mit korrekter Formatierung
 import io
 import pandas as pd
 from core.config import RESULT_COLUMNS
 
 
+# Exportiert alle DataFrames (Tabellestruktur) in eine Excel-Datei mit korrektem Text-Format.
 def export_to_excel(
-    df_sicher: pd.DataFrame, 
-    df_unsicher: pd.DataFrame, 
-    df_spam: pd.DataFrame, 
-    filename: str
+    df_sicher: pd.DataFrame, # Tab Sicher in der UI
+    df_unsicher: pd.DataFrame,  # Tab Unsicher in der UI
+    df_spam: pd.DataFrame,  # Tab Spam in der UI
+    filename: str # Dateiname 
 ) -> bytes:
-    """
-    Exportiert alle DataFrames in eine Excel-Datei mit korrektem Text-Format.
-    Führende Nullen bleiben erhalten.
-    
-    Args:
-        df_sicher: DataFrame mit sicheren Treffern
-        df_unsicher: DataFrame mit unsicheren Treffern
-        df_spam: DataFrame mit Spam-Treffern
-        filename: Dateiname (ohne Extension)
-    
-    Returns:
-        Excel-Datei als Bytes
-    """
     buffer = io.BytesIO()
     
     # Kombiniere alle DataFrames für den Export

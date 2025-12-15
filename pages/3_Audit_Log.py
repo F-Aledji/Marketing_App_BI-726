@@ -43,7 +43,7 @@ if os.path.exists(LOG_FILE):
             df_log = df_log.sort_values(by="Timestamp", ascending=False)
             
             st.success(f"📊 {len(df_log)} Einträge geladen")
-            st.dataframe(df_log, use_container_width=True, hide_index=True)
+            st.dataframe(df_log, width="stretch", hide_index=True)
         else:
             st.info("📭 Noch keine Einträge vorhanden.")
         

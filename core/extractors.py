@@ -1,6 +1,4 @@
-"""
-PDF-Extraktoren für Artikelnummern.
-"""
+# PDF Extraktionen und Analyse der Artikelnummern
 import io
 import re
 import fitz  # PyMuPDF
@@ -13,43 +11,30 @@ from collections import Counter
 from core.config import PATTERN, RESULT_COLUMNS, get_config
 from core.analyzers import check_plausibility, analyze_context
 
-
+# Bereinigt de nText von problematischen Whitespace-Zeichen
 def clean_text(text: str) -> str:
-    """Bereinigt Text von problematischen Whitespace-Zeichen."""
     return text.replace('\u00A0', ' ').replace('\xa0', ' ')
 
-
+# Extrahiert die Match-Gruppen aus dem Regex-Ergebnis
 def extract_match_groups(match_tuple: Tuple) -> Tuple[str, str, str]:
-    """Extrahiert die Match-Gruppen aus dem Regex-Ergebnis."""
     if match_tuple[0]: 
         return match_tuple[0], match_tuple[1], match_tuple[2]
     else: 
         return match_tuple[3], match_tuple[4], match_tuple[5]
 
-
+# Formatiert die Nummer aus den drei Teilen in lesbares Format
+# Damit soll gewährleistet werden dass die Nummern in der UI einheitlich dargestellt werden
 def normalize(p1: str, p2: str, p3: str) -> str:
-    """Formatiert die Nummer in lesbares Format."""
     return f"{p1} {p2} {p3}"
 
-
+# Gibt die reine Nummer ohne Leerzeichen zurück, z.B. "AB12345" oder "1212345"
 def get_clean_string(p1: str, p2: str, p3: str) -> str:
-    """Gibt die reine Nummer ohne Leerzeichen zurück."""
     return f"{p1}{p2}{p3}"
 
-
+# Extrahiert alle gültigen Matches aus einem Text (DRY-Hilfsfunktion).
+# Die Funktion wird sowohl von PyMuPDF als auch von pdfplumber genutzt
+# Die Ausgabe ist eine Liste von Dictionaries mit den Match-Informationen
 def extract_matches_from_text(text: str, page_num: int, source: str, config: dict = None) -> List[Dict]:
-    """
-    Extrahiert alle gültigen Matches aus einem Text (DRY-Hilfsfunktion).
-    
-    Args:
-        text: Der zu durchsuchende Text
-        page_num: Seitennummer (1-basiert)
-        source: Quelle ("PyMuPDF" oder "pdfplumber")
-        config: Optional - Blacklist-Konfiguration
-    
-    Returns:
-        Liste von Match-Dictionaries
-    """
     if config is None:
         config = get_config()
     
@@ -75,17 +60,10 @@ def extract_matches_from_text(text: str, page_num: int, source: str, config: dic
     
     return matches
 
-
+# Hauptfunktion zur Analyse eines PDFs und Extraktion der Artikelnummern
+# Input: Streamlit UploadedFile Objekt ist eine Funktion die in Streamlit genutzt werden kann
+# Output: Drei DataFrames (Sicher, Unsicher, Spam)
 def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Analysiert ein PDF und extrahiert Artikelnummern.
-    
-    Args:
-        uploaded_file: Streamlit UploadedFile Objekt
-    
-    Returns:
-        Tuple von (df_sicher, df_unsicher, df_spam)
-    """
     config = get_config()
     bytes_data = uploaded_file.getvalue()
     results = []
@@ -130,6 +108,8 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
             st.error(f"⚠️ pdfplumber Fehler: {e}")
 
     # --- DEDUPLIZIERUNG & STATUS ---
+    # Wenn keine Ergebnisse, leere DataFrames zurückgeben
+    # Wenn Ergebnisse vorhanden, deduplizieren und Status bestimmen
     if not results:
         empty_df = pd.DataFrame(columns=RESULT_COLUMNS)
         return empty_df.copy(), empty_df.copy(), empty_df.copy()
@@ -142,10 +122,12 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     counts = Counter(all_cleans)
 
     # Cross-Match Sets
+    # Cross-match ist wenn eine Nummer von beiden Engines gefunden wurde
     plumber_set = {x["Clean"] for x in results if x["Quelle"] == "pdfplumber"}
     fitz_set = {x["Clean"] for x in results if x["Quelle"] == "PyMuPDF"}
     
     # Sammle Context-Status und Kontext-String pro Clean-Nummer
+    # Clean Nummer ist die Nummer ohne Leerzeichen
     context_status_map: Dict[str, List[str]] = {}
     context_string_map: Dict[str, str] = {}
     for item in results:
@@ -166,6 +148,7 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
         if counts[item["Clean"]] > 10:
             status = "Spam"
         # Check 2: Kontext-basierter Spam
+        # also wenn in der Funktion analyze_context als "Spam_Candidate" markiert wurde
         elif all(s == "Spam_Candidate" for s in context_status_map.get(item["Clean"], [])):
             status = "Spam"
         # Check 3: Cross-Validation (Sicher wenn in beiden Engines gefunden)
@@ -183,7 +166,7 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     if not df.empty:
         df = df.sort_values(by=["Status", "Seite", "Artikelnummer"]).reset_index(drop=True)
     
-    # Aufteilen in drei DataFrames
+    # Aufteilen in drei DataFrames für die UI 
     df_sicher = df[df['Status'] == 'Sicher'][RESULT_COLUMNS].reset_index(drop=True)
     df_unsicher = df[df['Status'] == 'Unsicher'][RESULT_COLUMNS].reset_index(drop=True)
     df_spam = df[df['Status'] == 'Spam'][RESULT_COLUMNS].reset_index(drop=True)
