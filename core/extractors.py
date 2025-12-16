@@ -8,10 +8,10 @@ import streamlit as st
 from typing import Tuple, List, Dict
 from collections import Counter
 
-from core.config import PATTERN, RESULT_COLUMNS, get_config
+from core.config import PATTERN, RESULT_COLUMNS, get_config, get_clean_string
 from core.analyzers import check_plausibility, analyze_context
 
-# Bereinigt de nText von problematischen Whitespace-Zeichen
+# Bereinigt den Text von problematischen Whitespace-Zeichen
 def clean_text(text: str) -> str:
     return text.replace('\u00A0', ' ').replace('\xa0', ' ')
 
@@ -27,11 +27,6 @@ def extract_match_groups(match_tuple: Tuple) -> Tuple[str, str, str]:
 def normalize(p1: str, p2: str, p3: str) -> str:
     return f"{p1} {p2} {p3}"
 
-# Gibt die reine Nummer ohne Leerzeichen zurück, z.B. "AB12345" oder "1212345"
-def get_clean_string(p1: str, p2: str, p3: str) -> str:
-    return f"{p1}{p2}{p3}"
-
-# Extrahiert alle gültigen Matches aus einem Text (DRY-Hilfsfunktion).
 # Die Funktion wird sowohl von PyMuPDF als auch von pdfplumber genutzt
 # Die Ausgabe ist eine Liste von Dictionaries mit den Match-Informationen
 def extract_matches_from_text(text: str, page_num: int, source: str, config: dict = None) -> List[Dict]:

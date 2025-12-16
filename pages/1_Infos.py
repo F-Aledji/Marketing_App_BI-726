@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath('.'))
 
 # Konfiguration der Seite
 st.set_page_config(page_title="Infos", page_icon="ℹ️", layout="wide")
-show_sidebar
+show_sidebar()
 
 
 
