@@ -1,27 +1,55 @@
 import streamlit as st
 import sys, os
+from sidebar import show_sidebar
 sys.path.append(os.path.abspath('.'))
 
+
+# Konfiguration der Seite
 st.set_page_config(page_title="Infos", page_icon="ℹ️", layout="wide")
+show_sidebar
+
+
+
 
 # --- INHALT ---
 st.title("ℹ️ Infos")
 st.markdown("---")
 
 st.markdown("""
-## Platzhalter für Informationen
+## Artikelnummer-Suche App
 
-Hier können allgemeine Informationen zur Anwendung eingefügt werden:
+Diese Anwendung extrahiert Artikelnummern aus PDF-Dateien und klassifiziert sie automatisch.
 
-- **Version:** 1.0.0
-- **Autor:** [Platzhalter]
-- **Beschreibung:** [Platzhalter]
+### Features
+- **Dual-Engine Extraktion:** Zwei Such-Engines werden kombiniert um eine höhere Trefferquote zu erzielen
+- **KI-Prüfung:** Automatische Erkennung von falschen Treffern mittels KI
+- **3-Kategorien System:** Sicher, Unsicher, Spam(Löschkandidaten)
 
-### Anleitung
-1. [Platzhalter für Schritt 1]
-2. [Platzhalter für Schritt 2]
-3. [Platzhalter für Schritt 3]
+### Kategorien erklärt
+| Kategorie | Bedeutung |
+|-----------|-----------|
+| 🟢 **Sicher** | Von beiden Engines gefunden, KI-geprüft |
+| 🟡 **Unsicher** | Nur von einer Engine gefunden |
+| 🔴 **Spam** | Wahrscheinlich falsche Nummern (Tel, Fax, etc.) |
+
+---
+
+## Blacklist
+Die Anwendung verwendet eine Blacklist um unerwünschte Artikelnummern und Präfix-Zeichen zu filtern.
+Treffer, die auf der Blacklist für Nummern oder Präfixe stehen, werden komplett aussortiert.
+Treffer, in deren Umfeld "verbotene" Wörter (z.B. Tel, Fax) stehen, werden als Spam klassifiziert.
+Die Blacklist (gesperrte Prefixe, Nummern, Kontext-Wörter) wird zentral durch IT Data Analytics gepflegt.
+
+**Änderungswünsche bitte als Jira-Ticket einreichen (siehe Sidebar).**
+
+Bitte im Ticket angeben:
+- Welcher Wert soll hinzugefügt/entfernt werden?
+- Begründung für die Änderung
+- Beispiel-PDF falls relevant
+
+
+---
 
 ### Kontakt
-[Platzhalter für Kontaktinformationen]
+Bei Fragen oder Problemen wenden Sie sich über das Ticketsystem an das BI-Team.
 """)

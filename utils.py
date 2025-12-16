@@ -1,21 +1,18 @@
+# Utility-Funktionen für die Artikelnummer-Suche App
+# Nur Lese-Funktionen - Blacklist wird extern via Jira gepflegt
+
 import streamlit as st
 import json
 import os
-import pandas as pd
-from datetime import datetime
 
 # Pfade definieren
 DATA_DIR = "data"
 DATA_FILE = os.path.join(DATA_DIR, "blacklist.json")
-LOG_FILE = os.path.join(DATA_DIR, "audit_log.csv")
 
-# --- SPEICHERUNG / LADEN ---
-
+# Lädt die Blacklist (Prefixe, Nummern und Context-Wörter) aus der JSON.
+# Es stellt sicher dass alle erwarteten Felder vorhanden sind (Schema-Validierung).
 def load_blacklist_config() -> dict:
-    """
-    Lädt die Blacklist (Prefixe, Nummern und Context-Words) aus der JSON.
-    Stellt sicher, dass alle erwarteten Felder vorhanden sind (Schema-Validierung).
-    """
+ 
     # Default-Schema mit allen erwarteten Feldern
     default_config = {
         "bad_prefixes": [],
@@ -41,28 +38,3 @@ def load_blacklist_config() -> dict:
     except Exception as e:
         st.error(f"Fehler beim Laden der Config: {e}")
         return default_config
-
-def save_blacklist_config(config):
-    """Speichert die Config zurück in die JSON."""
-    # Ordner erstellen falls nicht existent
-    os.makedirs(DATA_DIR, exist_ok=True)
-    
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
-
-def log_change(user, action, value, reason):
-    """Schreibt einen Eintrag ins Audit-Log (CSV)."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    file_exists = os.path.exists(LOG_FILE)
-    
-    entry = {
-        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "User": user,
-        "Action": action,
-        "Value": value,
-        "Reason": reason
-    }
-    
-    df = pd.DataFrame([entry])
-    # Hängt die Zeile unten an (mode='a')
-    df.to_csv(LOG_FILE, mode='a', header=not file_exists, index=False, encoding="utf-8")
