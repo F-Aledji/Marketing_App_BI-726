@@ -3,9 +3,7 @@
 # Muster-Anomalien (False-Positives/Negatives). Es unterstützt zwei Provider:
 # - Gemini 2.5 Flash (Standard, günstiger)
 # - GPT-5 mini (Alternative, präziser)
-# 
 # Provider-Wechsel: Einfach den ACTIVE_PROVIDER unten ändern.
-
 
 import os
 import json
@@ -13,8 +11,10 @@ import pandas as pd
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
+from dotenv import load_dotenv
 
 
+load_dotenv()  # Lädt Umgebungsvariablen aus .env Datei
 # KONFIGURATION - API Keys aus Environment-Variablen
 # Einzusetzen in einer Umgebungsvariable oder in einer .env Datei:
 # - GEMINI_API_KEY=dein_gemini_key
@@ -30,7 +30,7 @@ OPENAI_MODEL = "gpt-5-mini-2025-08-07"
 
 # =============================================================================
 # DATENSTRUKTUREN
-# =============================================================================
+
 
 # Ergebnis der KI Analyse mit den bereinigten DataFrames und Verschiebungen
 @dataclass
@@ -46,44 +46,56 @@ class ReviewResult:
 
 # =============================================================================
 # PROMPT TEMPLATE
-# =============================================================================
 # Der Prompt wird an beide Provider gleich gesendet.
 # Die KI erhält die Daten als CSV und soll Muster-Anomalien erkennen.
 
-SYSTEM_PROMPT = """Du bist ein Experte für Artikelnummer-Analyse. Du erhältst drei Listen von Artikelnummern aus einer PDF-Extraktion:
+SYSTEM_PROMPT = """Du bist ein spezialisierter KI-Analyst zur Bereinigung von PDF-Extraktionsdaten (Artikelnummern).
+Deine Aufgabe: Validierung, Kategorisierung und Korrektur basierend auf Seiten-Mustern und Kontext.
 
-1. SICHER: Nummern die von beiden Extraktions-Engines PyMuPDF und pdfplumber gefunden wurden
-2. UNSICHER: Nummern die nur von einer Engine gefunden wurden
-3. SPAM: Womöglich Nummern die als falsch-positiv erkannt wurden (Telefonnummern, etc.) oder mehr als 10 Mal in der PDF vorkommen. Verdacht auf falsche Nummern.
+INPUT DATEN:
+1. SICHER (beide Engines)
+2. UNSICHER (eine Engine)
+3. SPAM (Verdachtsfälle/Häufige)
 
-Deine Aufgabe:
-- Analysiere die Muster der Artikelnummern PRO SEITE
-- Erkenne Ausreißer die nicht ins Muster passen als Hilfestellung erhältst du die Seitenanzahl und den Kontext um die gefundene Nummer herum. Der Kontext ist für dich die Hilfe um zu verstehen ob die Nummer tatsächlich eine Artikelnummer ist.
-- Beispiel: Wenn Seite 9 nur "62 2XX XX" Nummern hat, gehört "ab XXX XX" wahrscheinlich dort nicht hin
-- Verschiebe falsch klassifizierte Nummern in die richtige Kategorie
+ANALYSE-LOGIK PRO SEITE:
+1. Identifiziere das dominante Artikelnummern-Schema der Seite (z.B. "94 XXX XX").
+2. Prüfe jeden Eintrag gegen dieses Schema.
+3. Bei Abweichung: Nutze den KONTEXTString zur Reparatur.
 
+REPARATUR-STRATEGIE (WICHTIG):
+Oft extrahieren Engines durch Spaltenversatz Fragmente (z.B. "ab 123 45") statt der Nummer.
+Prüfe den Kontext:
+- Suche eine Nummer in direkter Nähe (oft rechts/links), die dem Seiten-Schema entspricht.
+- ZEILEN-LOGIK: Wenn der Kontext mehrere Nummern zeigt (z.B. Tabelle), wähle diejenige, die geometrisch zur Zeile des falschen Eintrags gehört.
+- FRAGMENTE: Oft ist das Ende der falschen Nummer (z.B. "...45") der Anfang der richtigen Nummer. Nutze dies als Indiz.
 
-WICHTIG: 
-- Analysiere NUR basierend auf Nummern-Mustern pro Seite
-- Sei konservativ - nur bei klaren Muster-Verletzungen verschieben und keine Vermutungen anstellen
-- Gib eine Begründung zu jede Verschiebung an um die Entscheidung nachvollziehbar zu machen
+AKTIONEN:
+- Verschiebe ungültige Nummern (Spam/Unsafe).
+- Wenn der Kontext eindeutig die *richtige* Nummer zeigt, biete eine KORREKTUR an.
 
-Antworte NUR mit validem JSON in diesem Format:
+OUTPUT FORMAT (JSON):
+Antworte NUR mit validem JSON. 
+WICHTIG: Das Feld "artikelnummer" muss EXAKT dem Input entsprechen (als ID). Die korrigierte Fassung kommt in "korrektur".
+
 {
     "verschiebungen": [
-        {"artikelnummer": "ab 247 10", "von": "Sicher", "nach": "Spam"},
-        {"artikelnummer": "62 001 01", "von": "Spam", "nach": "Sicher"}
-    ]
-
-     "verschiebungen": [
-        {"artikelnummer": "tel 222 11", "von": "Unsicher", "nach": "Spam"},
-        {"artikelnummer": "92 001 01", "von": "Spam", "nach": "Sicher"}
+        {
+            "artikelnummer": "ab 247 10", 
+            "korrektur": "94 247 10",
+            "von": "Sicher", 
+            "nach": "Sicher", 
+            "begruendung": "Extrahierter Wert war Fragment. Kontext bestätigt '94 247 10' als korrekte Nummer im Seiten-Muster."
+        },
+        {
+            "artikelnummer": "Tel: 030", 
+            "von": "Unsicher", 
+            "nach": "Spam", 
+            "begruendung": "Keine Artikelnummer, sondern Telefonnummer."
+        }
     ]
 }
-
-Falls keine Verschiebungen nötig sind musst du in dem Fall nichts tun. Antworte nur mit den Verschiebungen die du vornimmst.
+Falls keine Änderungen: {"verschiebungen": []}
 """
-
 # Baut den User Prompt mit den CSV-Daten der drei DataFrames
 # Input sind die drei DataFrames
 # Ausgabe ist ein formatierter String mit den CSV-Daten
@@ -118,7 +130,12 @@ class AIProvider(ABC):
     def analyze(self, user_prompt: str) -> dict:
         pass
 
+
+
+
+# =============================================================================
 # GEMINI PROVIDER (Standard) für Google Gemini 2.5 Flash - 1M Token Input Kontext ca 65.536 Output
+# =============================================================================
 class GeminiProvider(AIProvider):
     @property
     def name(self) -> str:
@@ -158,8 +175,7 @@ class GeminiProvider(AIProvider):
 
 # =============================================================================
 # OPENAI PROVIDER (Alternative)
-
-
+# =============================================================================
 # Hier wird GPT 5 mini genutzt - 400k Token Input - 128k Token Output Kontext 
 # Etwas teurer als Gemini, aber oft präziser bei strukturierten Daten
 class OpenAIProvider(AIProvider):    
@@ -191,7 +207,7 @@ class OpenAIProvider(AIProvider):
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.1  # Niedrige Temperatur für konsistente Ergebnisse
+            reasoning_effort="high"
         )
         
         # Response parsen
@@ -204,12 +220,12 @@ class OpenAIProvider(AIProvider):
 # =============================================================================
 # Kommentiere den gewünschten Provider ein/aus:
 
-ACTIVE_PROVIDER = GeminiProvider()    # <- Standard: Gemini 2.5 Flash
-# ACTIVE_PROVIDER = OpenAIProvider()  # <- Alternative: GPT-5 mini
+#ACTIVE_PROVIDER = GeminiProvider()    # <- Standard: Gemini 2.5 Flash
+ACTIVE_PROVIDER = OpenAIProvider()  # <- Alternative: GPT-5 mini
 
 
 # =============================================================================
-# HAUPTFUNKTION
+# AB HIER HAUPTFUNKTION
 # =============================================================================
 
 # Hauptfunktion zur Überprüfung und Korrektur der DataFrames mit KI
@@ -250,37 +266,38 @@ def review_dataframes(
             von = v.get("von", "").lower()
             nach = v.get("nach", "").lower()
             
-            # Quell-DataFrame bestimmen
+            # Zeile finden und verschieben - direkt auf den richtigen DataFrames arbeiten
             if von == "sicher":
-                quell_df = df_sicher_neu
+                maske = df_sicher_neu["Artikelnummer"] == artikelnummer
+                if maske.any():
+                    zeile = df_sicher_neu[maske].copy()
+                    df_sicher_neu = df_sicher_neu[~maske]
+                else:
+                    continue
             elif von == "unsicher":
-                quell_df = df_unsicher_neu
+                maske = df_unsicher_neu["Artikelnummer"] == artikelnummer
+                if maske.any():
+                    zeile = df_unsicher_neu[maske].copy()
+                    df_unsicher_neu = df_unsicher_neu[~maske]
+                else:
+                    continue
             elif von == "spam":
-                quell_df = df_spam_neu
+                maske = df_spam_neu["Artikelnummer"] == artikelnummer
+                if maske.any():
+                    zeile = df_spam_neu[maske].copy()
+                    df_spam_neu = df_spam_neu[~maske]
+                else:
+                    continue
             else:
                 continue  # Ungültige Quelle, überspringen
             
-            # Zeile finden und verschieben
-            maske = quell_df["Artikelnummer"] == artikelnummer
-            if maske.any():
-                # Zeile extrahieren
-                zeile = quell_df[maske].copy()
-                
-                # Aus Quelle entfernen
-                if von == "sicher":
-                    df_sicher_neu = df_sicher_neu[~maske]
-                elif von == "unsicher":
-                    df_unsicher_neu = df_unsicher_neu[~maske]
-                elif von == "spam":
-                    df_spam_neu = df_spam_neu[~maske]
-                
-                # In Ziel einfügen
-                if nach == "sicher":
-                    df_sicher_neu = pd.concat([df_sicher_neu, zeile], ignore_index=True)
-                elif nach == "unsicher":
-                    df_unsicher_neu = pd.concat([df_unsicher_neu, zeile], ignore_index=True)
-                elif nach == "spam":
-                    df_spam_neu = pd.concat([df_spam_neu, zeile], ignore_index=True)
+            # In Ziel einfügen
+            if nach == "sicher":
+                df_sicher_neu = pd.concat([df_sicher_neu, zeile], ignore_index=True)
+            elif nach == "unsicher":
+                df_unsicher_neu = pd.concat([df_unsicher_neu, zeile], ignore_index=True)
+            elif nach == "spam":
+                df_spam_neu = pd.concat([df_spam_neu, zeile], ignore_index=True)
         
         return ReviewResult(
             df_sicher=df_sicher_neu,

@@ -1,5 +1,6 @@
 # WS Bestellnummer Suche App
 import streamlit as st
+import pandas as pd
 import warnings
 
 # Core-Module importieren
@@ -21,6 +22,7 @@ st.title(" WS Artikelnummer-Suche App")
 
 uploaded_file = st.file_uploader("PDF hier reinziehen", type=["pdf"])
 
+# --- PDF ANALYSE STARTEN ---
 if uploaded_file:
     # Button Start
     if st.button("🔍 Suche starten", type="primary"):
@@ -34,6 +36,11 @@ if uploaded_file:
             # Schritt 1: PDF-Extraktion
             df_sicher, df_unsicher, df_spam = analyze_pdf(uploaded_file)
             
+            # Original-Daten speichern (vor KI-Anpassungen) für Excel-Export
+            st.session_state["data_original_sicher"] = df_sicher.copy()
+            st.session_state["data_original_unsicher"] = df_unsicher.copy()
+            st.session_state["data_original_spam"] = df_spam.copy()
+            
             total = len(df_sicher) + len(df_unsicher) + len(df_spam)
             if total == 0:
                 st.warning("Nichts gefunden.")
@@ -43,7 +50,7 @@ if uploaded_file:
         
         # Schritt 2: KI-Analyse (außerhalb des ersten Spinners für separate Anzeige)
         if total > 0:
-            with st.spinner(f"🤖 {get_active_provider_name()} prüft Ergebnisse..."):
+            with st.spinner(f"✨ {get_active_provider_name()} prüft Ergebnisse..."):
                 review_result = review_dataframes(df_sicher, df_unsicher, df_spam)
                 
                 if review_result.erfolg:
@@ -68,9 +75,14 @@ if uploaded_file:
                     st.session_state["ki_fehler"] = review_result.fehler_msg
                     st.session_state["analyse_done"] = False
 
+
+
 # --- FEHLERANZEIGE BEI KI-PROBLEM ---
 if st.session_state.get("ki_erfolg") == False:
     st.error(f"❌ {st.session_state.get('ki_fehler', 'Unbekannter Fehler bei der KI-Analyse')}")
+
+
+
 
 # --- 3-TAB COCKPIT ---
 if st.session_state.get("analyse_done", False):
@@ -93,7 +105,7 @@ if st.session_state.get("analyse_done", False):
         if zu_unsicher > 0:
             hinweis_teile.append(f"{zu_unsicher}× → Unsicher")
         
-        st.info(f"🤖 **KI-Analyse:** {', '.join(hinweis_teile)} verschoben")
+        st.info(f"✨ **KI-Analyse:** {', '.join(hinweis_teile)} verschoben")
     
     # Metrics Übersicht
     col1, col2, col3 = st.columns(3)
@@ -112,8 +124,11 @@ if st.session_state.get("analyse_done", False):
     display_unsicher = prepare_for_display(st.session_state["data_unsicher"])
     display_spam = prepare_for_display(st.session_state["data_spam"])
     
+    # KI-Verschiebungen laden
+    ki_verschiebungen = st.session_state.get("ki_verschiebungen", [])
+    
     # Tabs
-    tab1, tab2, tab3 = st.tabs(["🟢 Sicher", "🟡 Unsicher", "🔴 Spam"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🟢 Sicher", "🟡 Unsicher", "🔴 Spam", "✨ KI-Protokoll"])
     
     # --- TAB 1: SICHER ---
     with tab1:
@@ -160,16 +175,56 @@ if st.session_state.get("analyse_done", False):
         else:
             st.info("Keine Spam-Treffer gefunden.")
     
+    # --- TAB 4: KI-PROTOKOLL ---
+    with tab4:
+        st.subheader("KI-Verschiebungen")
+        st.caption("Hier siehst du alle Änderungen, die die KI vorgenommen hat, mit Begründung.")
+        
+        if ki_verschiebungen:
+            # Verschiebungen als DataFrame darstellen
+            verschiebungen_data = []
+            for v in ki_verschiebungen:
+                verschiebungen_data.append({
+                    "Artikelnummer": v.get("artikelnummer", ""),
+                    "Von": v.get("von", ""),
+                    "Nach": v.get("nach", ""),
+                    "Begründung": v.get("begruendung", "Muster-Anomalie erkannt")
+                })
+            df_verschiebungen = pd.DataFrame(verschiebungen_data)
+            
+            st.dataframe(
+                df_verschiebungen,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Artikelnummer": st.column_config.TextColumn("Artikelnummer", width="medium"),
+                    "Von": st.column_config.TextColumn("Von", width="small"),
+                    "Nach": st.column_config.TextColumn("Nach", width="small"),
+                    "Begründung": st.column_config.TextColumn("Begründung", width="large"),
+                }
+            )
+        else:
+            st.info("Die KI hat keine Verschiebungen vorgenommen.")
+    
     # --- EXPORT ---
     st.divider()
     st.subheader("📥 Excel Export")
     
-    # Export mit Display-Spalten (ohne Kontext)
+    # Original-Daten für Export vorbereiten (falls vorhanden)
+    display_original_sicher = prepare_for_display(st.session_state.get("data_original_sicher", pd.DataFrame()))
+    display_original_unsicher = prepare_for_display(st.session_state.get("data_original_unsicher", pd.DataFrame()))
+    display_original_spam = prepare_for_display(st.session_state.get("data_original_spam", pd.DataFrame()))
+    
+    # Export mit allen drei Sheets (Original, KI angepasst, Verschiebungen)
     excel_data = export_to_excel(
         display_sicher,
         display_unsicher,
         display_spam,
-        st.session_state.get("datei_name", "export")
+        st.session_state.get("datei_name", "export"),
+        df_original_sicher=display_original_sicher,
+        df_original_unsicher=display_original_unsicher,
+        df_original_spam=display_original_spam,
+        verschiebungen=ki_verschiebungen
     )
     
     col_exp1, col_exp2 = st.columns([1, 3])

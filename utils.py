@@ -1,5 +1,5 @@
 # Utility-Funktionen für die Artikelnummer-Suche App
-# Nur Lese-Funktionen - Blacklist wird extern via Jira gepflegt
+
 
 import streamlit as st
 import json

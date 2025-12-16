@@ -1,5 +1,6 @@
 {
   "bad_prefixes": [
+    "AB",
     "TEL",
     "FAX",
     "MOB",
