@@ -1,2 +1,7 @@
+<<<<<<< HEAD
 .env
 /tests
+=======
+venv/
+tests/
+>>>>>>> 20c20c4ebbafc8485f47815e4b0a657abdd58aed

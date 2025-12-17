@@ -3,12 +3,7 @@
 import io
 import pdfplumber
 from typing import Tuple, List
-from core.config import get_config
-
-# Gibt die reine Nummer ohne Leerzeichen zurück, z.B. "AB12345" oder "1212345"
-# Aufteilung in 3 Teile nötig um die Anforderungen von Regex zu erfüllen 
-def get_clean_string(p1: str, p2: str, p3: str) -> str:
-    return f"{p1}{p2}{p3}"
+from core.config import get_config, get_clean_string
 
 
 # Prüft gegen die Filter-Logik (PATTERN_ALPHA/NUMERIC) UND gegen die geladene JSON-Blacklist

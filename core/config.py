@@ -44,3 +44,9 @@ def prepare_for_display(df) -> "pd.DataFrame":
     # Nur Spalten behalten die in DISPLAY_COLUMNS definiert sind
     available_cols = [col for col in DISPLAY_COLUMNS if col in df.columns]
     return df[available_cols].copy()
+
+
+# Gibt die reine Nummer ohne Leerzeichen zurück, z.B. "AB12345" oder "1212345"
+# Aufteilung in 3 Teile nötig um die Anforderungen von Regex zu erfüllen 
+def get_clean_string(p1: str, p2: str, p3: str) -> str:
+    return f"{p1}{p2}{p3}"

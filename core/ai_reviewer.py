@@ -35,11 +35,16 @@ OPENAI_MODEL = "gpt-5-mini-2025-08-07"
 # Ergebnis der KI Analyse mit den bereinigten DataFrames und Verschiebungen
 @dataclass
 class ReviewResult:
-  
+    # Original-Daten VOR der KI-Analyse (für Excel-Export)
+    df_sicher_original: pd.DataFrame
+    df_unsicher_original: pd.DataFrame
+    df_spam_original: pd.DataFrame
+    # Bereinigte Daten NACH der KI-Analyse
     df_sicher: pd.DataFrame
     df_unsicher: pd.DataFrame
     df_spam: pd.DataFrame
-    verschiebungen: list  # [{"artikelnummer": "...", "von": "...", "nach": "..."}]
+    # KI-Aktionen für Logs
+    verschiebungen: list  # [{"artikelnummer": "...", "von": "...", "nach": "...", "korrektur": "...", "begruendung": "..."}]
     erfolg: bool = True
     fehler_msg: str = ""
 
@@ -49,6 +54,7 @@ class ReviewResult:
 # Der Prompt wird an beide Provider gleich gesendet.
 # Die KI erhält die Daten als CSV und soll Muster-Anomalien erkennen.
 
+<<<<<<< HEAD
 SYSTEM_PROMPT = """Du bist ein spezialisierter KI-Analyst zur Bereinigung von PDF-Extraktionsdaten (Artikelnummern).
 Deine Aufgabe: Validierung, Kategorisierung und Korrektur basierend auf Seiten-Mustern und Kontext.
 
@@ -76,10 +82,40 @@ AKTIONEN:
 OUTPUT FORMAT (JSON):
 Antworte NUR mit validem JSON. 
 WICHTIG: Das Feld "artikelnummer" muss EXAKT dem Input entsprechen (als ID). Die korrigierte Fassung kommt in "korrektur".
+=======
+SYSTEM_PROMPT = """Du bist ein Experte für Datenbereinigung und Artikelnummer-Analyse.
+Du erhältst drei Listen von Artikelnummern aus einer PDF-Extraktion:
+
+1. SICHER: Nummern die von beiden Extraktions-Engines gefunden wurden.
+2. UNSICHER: Nummern die nur von einer Engine gefunden wurden.
+3. SPAM: Verdachtsfälle (falsch-positiv, Telefonnummern, Datum, Häufigkeit >10).
+
+DEINE AUFGABE:
+1. Analysiere das dominante Nummern-Muster PRO SEITE.
+2. Identifiziere Ausreißer, die nicht ins Muster der Seite passen.
+3. Nutze den mitgelieferten KONTEXT, um zu entscheiden:
+   - Ist es Spam? (Verschieben nach SPAM)
+   - Ist es ein Extraktions-Fehler? (Reparieren)
+
+REPARATUR-LOGIK (WICHTIG):
+Oft greift der Regex im PDF daneben (z.B. "ab 123 45" statt "94 123 45").
+- Wenn eine Nummer unvollständig oder falsch wirkt, suche im KONTEXT.
+- Wenn du im Kontext (oft direkt daneben) die *tatsächliche* Artikelnummer siehst, die perfekt ins Seitenmuster passt, dann führe eine KORREKTUR durch.
+- Achte auf Zeilenversatz: Nimm die Nummer, die geometrisch zur Zeile gehört.
+
+OUTPUT REGELN (SILENT SUCCESS):
+- Gib NIEMALS Einträge aus, die korrekt sind und nicht verändert werden müssen.
+- Melde NUR Einträge, bei denen sich die Kategorie ändert ODER eine inhaltliche Korrektur nötig ist.
+- Sparsamkeit: Halte die Begründungen kurz.
+
+ANTWORTE NUR MIT VALIDEM JSON IN DIESEM FORMAT:
+Nutze das Feld "korrektur" nur, wenn sich der Zahlenwert ändert. Das Feld "artikelnummer" ist die ID zum Finden des Eintrags und muss dem Input entsprechen.
+>>>>>>> 20c20c4ebbafc8485f47815e4b0a657abdd58aed
 
 {
     "verschiebungen": [
         {
+<<<<<<< HEAD
             "artikelnummer": "ab 247 10", 
             "korrektur": "94 247 10",
             "von": "Sicher", 
@@ -96,6 +132,25 @@ WICHTIG: Das Feld "artikelnummer" muss EXAKT dem Input entsprechen (als ID). Die
 }
 Falls keine Änderungen: {"verschiebungen": []}
 """
+=======
+            "artikelnummer": "ab 247 10",
+            "korrektur": "94 247 10",
+            "von": "Sicher",
+            "nach": "Sicher",
+            "begruendung": "Fragment im Kontext korrigiert, passt nun zum Seitenmuster."
+        },
+        {
+            "artikelnummer": "030 123456",
+            "von": "Unsicher",
+            "nach": "Spam",
+            "begruendung": "Telefonnummer erkannt."
+        }
+    ]
+}
+
+Falls keine Fehler gefunden wurden, antworte exakt mit: {"verschiebungen": []}"""
+
+>>>>>>> 20c20c4ebbafc8485f47815e4b0a657abdd58aed
 # Baut den User Prompt mit den CSV-Daten der drei DataFrames
 # Input sind die drei DataFrames
 # Ausgabe ist ein formatierter String mit den CSV-Daten
@@ -236,10 +291,18 @@ def review_dataframes(
     df_unsicher: pd.DataFrame,
     df_spam: pd.DataFrame
 ) -> ReviewResult:
+    # Original-Daten sichern für Excel-Export (vor jeder Modifikation)
+    df_sicher_original = df_sicher.copy()
+    df_unsicher_original = df_unsicher.copy()
+    df_spam_original = df_spam.copy()
+    
     # Prüfen ob überhaupt Daten vorhanden sind
     total = len(df_sicher) + len(df_unsicher) + len(df_spam)
     if total == 0:
         return ReviewResult(
+            df_sicher_original=df_sicher_original,
+            df_unsicher_original=df_unsicher_original,
+            df_spam_original=df_spam_original,
             df_sicher=df_sicher,
             df_unsicher=df_unsicher,
             df_spam=df_spam,
@@ -255,17 +318,21 @@ def review_dataframes(
         result = ACTIVE_PROVIDER.analyze(user_prompt)
         verschiebungen = result.get("verschiebungen", [])
         
-        # Kopien der DataFrames erstellen für Modifikation
-        df_sicher_neu = df_sicher.copy()
-        df_unsicher_neu = df_unsicher.copy()
-        df_spam_neu = df_spam.copy()
+        # Dictionary-basierter Ansatz für DRY-Code
+        dfs = {
+            "sicher": df_sicher.copy(),
+            "unsicher": df_unsicher.copy(),
+            "spam": df_spam.copy()
+        }
         
-        # Verschiebungen anwenden
+        # Verschiebungen und Korrekturen anwenden
         for v in verschiebungen:
             artikelnummer = v.get("artikelnummer", "")
+            korrektur = v.get("korrektur", "")  # NEU: Korrigierte Artikelnummer
             von = v.get("von", "").lower()
             nach = v.get("nach", "").lower()
             
+<<<<<<< HEAD
             # Zeile finden und verschieben - direkt auf den richtigen DataFrames arbeiten
             if von == "sicher":
                 maske = df_sicher_neu["Artikelnummer"] == artikelnummer
@@ -298,22 +365,49 @@ def review_dataframes(
                 df_unsicher_neu = pd.concat([df_unsicher_neu, zeile], ignore_index=True)
             elif nach == "spam":
                 df_spam_neu = pd.concat([df_spam_neu, zeile], ignore_index=True)
+=======
+            # Validierung der Kategorie-Namen
+            if von not in dfs or nach not in dfs:
+                continue  # Ungültige Quelle/Ziel, überspringen
+            
+            # Zeile finden
+            maske = dfs[von]["Artikelnummer"] == artikelnummer
+            if maske.any():
+                # Zeile extrahieren
+                zeile = dfs[von][maske].copy()
+                
+                # KORREKTUR anwenden: Artikelnummer ersetzen falls vorhanden
+                if korrektur:
+                    zeile["Artikelnummer"] = korrektur
+                
+                # Aus Quelle entfernen
+                dfs[von] = dfs[von][~maske]
+                
+                # In Ziel einfügen
+                dfs[nach] = pd.concat([dfs[nach], zeile], ignore_index=True)
+>>>>>>> 20c20c4ebbafc8485f47815e4b0a657abdd58aed
         
         return ReviewResult(
-            df_sicher=df_sicher_neu,
-            df_unsicher=df_unsicher_neu,
-            df_spam=df_spam_neu,
+            df_sicher_original=df_sicher_original,
+            df_unsicher_original=df_unsicher_original,
+            df_spam_original=df_spam_original,
+            df_sicher=dfs["sicher"],
+            df_unsicher=dfs["unsicher"],
+            df_spam=dfs["spam"],
             verschiebungen=verschiebungen,
             erfolg=True
         )
         
     except Exception as e:
-        # Bei Fehler: Leere DataFrames zurückgeben und Fehlermeldung setzen
-        # Die UI zeigt dann die Fehlermeldung an statt ungeprüfte Daten
+        # Bei Fehler: Original-DataFrames zurückgeben mit Fehlermeldung
+        # Die UI kann entscheiden ob sie ungeprüfte Daten anzeigen will
         return ReviewResult(
-            df_sicher=pd.DataFrame(),
-            df_unsicher=pd.DataFrame(),
-            df_spam=pd.DataFrame(),
+            df_sicher_original=df_sicher_original,
+            df_unsicher_original=df_unsicher_original,
+            df_spam_original=df_spam_original,
+            df_sicher=df_sicher_original,
+            df_unsicher=df_unsicher_original,
+            df_spam=df_spam_original,
             verschiebungen=[],
             erfolg=False,
             fehler_msg=f"KI-Analyse fehlgeschlagen: {str(e)}"

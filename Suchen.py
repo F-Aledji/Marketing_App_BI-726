@@ -7,7 +7,7 @@ import warnings
 from core.config import get_column_config, prepare_for_display
 from core.extractors import analyze_pdf
 from core.analyzers import check_ocr_quality
-from core.exporters import export_to_excel
+from core.exporters import export_to_excel_with_logs
 from core.ai_reviewer import review_dataframes, get_active_provider_name
 from sidebar import show_sidebar
 
@@ -27,6 +27,7 @@ if uploaded_file:
     # Button Start
     if st.button("🔍 Suche starten", type="primary"):
         with st.spinner("Suche läuft..."):
+            
             bytes_data = uploaded_file.getvalue()
             
             # OCR-Qualitätsprüfung (nur beim Starten, nicht beim Upload)
@@ -66,9 +67,13 @@ if uploaded_file:
                     st.session_state["datei_name"] = uploaded_file.name
                     st.session_state["analyse_done"] = True
                     
-                    # KI-Verschiebungen speichern für Anzeige
                     st.session_state["ki_verschiebungen"] = review_result.verschiebungen
                     st.session_state["ki_erfolg"] = True
+                    
+                    # Original-Daten für Excel-Export speichern
+                    st.session_state["data_sicher_original"] = review_result.df_sicher_original
+                    st.session_state["data_unsicher_original"] = review_result.df_unsicher_original
+                    st.session_state["data_spam_original"] = review_result.df_spam_original
                 else:
                     # KI-Fehler: Fehlermeldung speichern, keine Ergebnisse anzeigen
                     st.session_state["ki_erfolg"] = False
@@ -210,6 +215,7 @@ if st.session_state.get("analyse_done", False):
     st.divider()
     st.subheader("📥 Excel Export")
     
+<<<<<<< HEAD
     # Original-Daten für Export vorbereiten (falls vorhanden)
     display_original_sicher = prepare_for_display(st.session_state.get("data_original_sicher", pd.DataFrame()))
     display_original_unsicher = prepare_for_display(st.session_state.get("data_original_unsicher", pd.DataFrame()))
@@ -225,6 +231,18 @@ if st.session_state.get("analyse_done", False):
         df_original_unsicher=display_original_unsicher,
         df_original_spam=display_original_spam,
         verschiebungen=ki_verschiebungen
+=======
+    # Export mit Display-Spalten und KI-Logs (3 Sheets: Vor_KI, Nach_KI, KI_Logs)
+    excel_data = export_to_excel_with_logs(
+        prepare_for_display(st.session_state.get("data_sicher_original", display_sicher)),
+        prepare_for_display(st.session_state.get("data_unsicher_original", display_unsicher)),
+        prepare_for_display(st.session_state.get("data_spam_original", display_spam)),
+        display_sicher,
+        display_unsicher,
+        display_spam,
+        st.session_state.get("ki_verschiebungen", []),
+        st.session_state.get("datei_name", "export")
+>>>>>>> 20c20c4ebbafc8485f47815e4b0a657abdd58aed
     )
     
     col_exp1, col_exp2 = st.columns([1, 3])
