@@ -13,6 +13,10 @@ import pandas as pd
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
+import dotenv as dotenv
+
+# Load environment variables from .env file
+dotenv.load_dotenv()
 
 
 # KONFIGURATION - API Keys aus Environment-Variablen
@@ -24,7 +28,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Modell-Namen
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3-flash-preview"
 OPENAI_MODEL = "gpt-5-mini-2025-08-07"
 
 
@@ -166,7 +170,8 @@ class GeminiProvider(AIProvider):
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
-                temperature=0.1  # Niedrige Temperatur für konsistente Ergebnisse
+                thinking_config=types.ThinkingConfig(thinking_level="high")
+                  # Niedrige Temperatur für konsistente Ergebnisse
             )
         )
         
@@ -223,7 +228,7 @@ class OpenAIProvider(AIProvider):
 # =============================================================================
 # Kommentiere den gewünschten Provider ein/aus:
 
-ACTIVE_PROVIDER = GeminiProvider()    # <- Standard: Gemini 2.5 Flash
+ACTIVE_PROVIDER = GeminiProvider()    # <- Standard: Gemini 3 Flash Preview
 # ACTIVE_PROVIDER = OpenAIProvider()  # <- Alternative: GPT-5 mini
 
 
