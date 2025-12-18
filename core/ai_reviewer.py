@@ -25,7 +25,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Modell-Namen
 GEMINI_MODEL = "gemini-2.5-flash"
-OPENAI_MODEL = "gpt-5-mini-2025-08-07"
+OPENAI_MODEL = "gpt-5.1-2025-11-13"
 
 
 # =============================================================================
@@ -184,7 +184,7 @@ class GeminiProvider(AIProvider):
 class OpenAIProvider(AIProvider):    
     @property
     def name(self) -> str:
-        return "GPT-5 mini"
+        return "gpt-5.1-2025-11-13"
     
     # Sendet Anfrage an OpenAI API mit JSON-Response-Format
     def analyze(self, user_prompt: str) -> dict:
@@ -223,8 +223,8 @@ class OpenAIProvider(AIProvider):
 # =============================================================================
 # Kommentiere den gewünschten Provider ein/aus:
 
-ACTIVE_PROVIDER = GeminiProvider()    # <- Standard: Gemini 2.5 Flash
-# ACTIVE_PROVIDER = OpenAIProvider()  # <- Alternative: GPT-5 mini
+#ACTIVE_PROVIDER = GeminiProvider()    # <- Standard: Gemini 2.5 Flash
+ACTIVE_PROVIDER = OpenAIProvider()  # <- Alternative: GPT-5 mini
 
 
 # =============================================================================

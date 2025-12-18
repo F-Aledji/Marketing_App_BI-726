@@ -1,6 +1,11 @@
 # WS Bestellnummer Suche App
 import streamlit as st
 import warnings
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Core-Module importieren
 from core.config import get_column_config, prepare_for_display
