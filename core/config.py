@@ -24,9 +24,6 @@ PATTERN = rf"(?i)(?:{PATTERN_ALPHA})|(?:{PATTERN_NUMERIC})"
 INTERNAL_COLUMNS: List[str] = ["Seite", "Artikelnummer", "Kontext"]
 DISPLAY_COLUMNS: List[str] = ["Seite", "Artikelnummer"]
 
-# Legacy-Konstante für Abwärtskompatibilität (wird intern verwendet)
-RESULT_COLUMNS: List[str] = INTERNAL_COLUMNS
-
 # Definiert wie die Spalten in der UI dargestellt werden (nur Display-Spalten)
 def get_column_config() -> Dict:
     return {

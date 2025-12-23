@@ -8,7 +8,7 @@ import streamlit as st
 from typing import Tuple, List, Dict
 from collections import Counter
 
-from core.config import PATTERN, RESULT_COLUMNS, get_config, get_clean_string
+from core.config import PATTERN, INTERNAL_COLUMNS, get_config, get_clean_string
 from core.analyzers import check_plausibility, analyze_context
 
 # Bereinigt den Text von problematischen Whitespace-Zeichen
@@ -106,7 +106,7 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     # Wenn keine Ergebnisse, leere DataFrames zurückgeben
     # Wenn Ergebnisse vorhanden, deduplizieren und Status bestimmen
     if not results:
-        empty_df = pd.DataFrame(columns=RESULT_COLUMNS)
+        empty_df = pd.DataFrame(columns=INTERNAL_COLUMNS)
         return empty_df.copy(), empty_df.copy(), empty_df.copy()
 
     seen = set()
@@ -162,8 +162,8 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
         df = df.sort_values(by=["Status", "Seite", "Artikelnummer"]).reset_index(drop=True)
     
     # Aufteilen in drei DataFrames für die UI 
-    df_sicher = df[df['Status'] == 'Sicher'][RESULT_COLUMNS].reset_index(drop=True)
-    df_unsicher = df[df['Status'] == 'Unsicher'][RESULT_COLUMNS].reset_index(drop=True)
-    df_spam = df[df['Status'] == 'Spam'][RESULT_COLUMNS].reset_index(drop=True)
+    df_sicher = df[df['Status'] == 'Sicher'][INTERNAL_COLUMNS].reset_index(drop=True)
+    df_unsicher = df[df['Status'] == 'Unsicher'][INTERNAL_COLUMNS].reset_index(drop=True)
+    df_spam = df[df['Status'] == 'Spam'][INTERNAL_COLUMNS].reset_index(drop=True)
     
     return df_sicher, df_unsicher, df_spam

@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.config import PATTERN, RESULT_COLUMNS
+from core.config import PATTERN, INTERNAL_COLUMNS
 
 
 class TestPatternConstants:
@@ -48,12 +48,12 @@ class TestResultColumns:
     """Tests für die Spalten-Konstanten."""
     
     def test_result_columns_content(self):
-        assert "Seite" in RESULT_COLUMNS
-        assert "Artikelnummer" in RESULT_COLUMNS
-        assert "Kontext" in RESULT_COLUMNS
+        assert "Seite" in INTERNAL_COLUMNS
+        assert "Artikelnummer" in INTERNAL_COLUMNS
+        assert "Kontext" in INTERNAL_COLUMNS
     
     def test_result_columns_order(self):
-        assert RESULT_COLUMNS == ["Seite", "Artikelnummer", "Kontext"]
+        assert INTERNAL_COLUMNS == ["Seite", "Artikelnummer", "Kontext"]
     
     def test_result_columns_length(self):
-        assert len(RESULT_COLUMNS) == 3
+        assert len(INTERNAL_COLUMNS) == 3

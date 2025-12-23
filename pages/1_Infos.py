@@ -1,8 +1,5 @@
 import streamlit as st
-import sys, os
 from sidebar import show_sidebar
-sys.path.append(os.path.abspath('.'))
-
 
 # Konfiguration der Seite
 st.set_page_config(page_title="Infos", page_icon="ℹ️", layout="wide")

@@ -81,21 +81,3 @@ def export_to_excel_with_logs(
         worksheet.set_column('E:E', 50)  # Begründung
     
     return buffer.getvalue()
-
-
-# Legacy-Funktion für Abwärtskompatibilität (nur Nach_KI-Daten)
-def export_to_excel(
-    df_sicher: pd.DataFrame,
-    df_unsicher: pd.DataFrame,
-    df_spam: pd.DataFrame,
-    filename: str
-) -> bytes:
-    """Exportiert DataFrames in eine Excel-Datei (Legacy, nur ein Sheet)."""
-    buffer = io.BytesIO()
-    export_df = _combine_dataframes(df_sicher, df_unsicher, df_spam)
-    
-    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        _format_excel_sheet(writer, 'Ergebnisse', export_df)
-    
-    return buffer.getvalue()
-
