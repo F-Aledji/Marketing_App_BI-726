@@ -131,11 +131,13 @@ def get_tracking_stats() -> dict:
         except (ValueError, TypeError):
             pass
     
+    
     return {
         "total_calls": total,
         "success_rate": round((successes / total) * 100, 1) if total > 0 else 0.0,
         "avg_duration": round(sum(durations) / len(durations), 2) if durations else 0.0,
         "total_input_tokens": total_input,
         "total_output_tokens": total_output,
+        "provider": logs[-1].get("provider", "—") if logs else "—",
         "logs": logs[-50:]
     }

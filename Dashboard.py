@@ -71,7 +71,7 @@ with col3:
     st.metric("Ø Dauer", f"{stats['avg_duration']}s")
 
 with col4:
-    st.metric("Provider", "GPT-5.1")
+    st.metric("Provider", stats["provider"])
 
 st.divider()
 
