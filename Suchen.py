@@ -8,12 +8,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Core-Module importieren
-from core.config import get_column_config, prepare_for_display
-from core.extractors import analyze_pdf
-from core.analyzers import check_ocr_quality
-from core.exporters import export_to_excel_with_logs
-from core.ai_reviewer import review_dataframes, get_active_provider_name
-from sidebar import show_sidebar
+from core.config.config import get_column_config, prepare_for_display
+from core.extraction.extractors import analyze_pdf
+from core.analysis.analyzers import check_ocr_quality
+from core.export.exporters import export_to_excel_with_logs
+from core.ai.reviewer import review_dataframes
+from core.ai.providers import get_active_provider_name
+from core.ui.sidebar import show_sidebar
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -47,36 +48,52 @@ if uploaded_file:
             else:
                 st.success(f"✅ {total} Treffer gefunden!")
         
-        # Schritt 2: KI-Analyse (außerhalb des ersten Spinners für separate Anzeige)
+        # Schritt 2: KI-Analyse mit Progress-Feedback
         if total > 0:
-            with st.spinner(f"🤖 {get_active_provider_name()} prüft Ergebnisse..."):
-                review_result = review_dataframes(df_sicher, df_unsicher, df_spam)
+            progress_container = st.empty()
+            status_text = st.empty()
+            
+            def update_progress(current: int, total_batches: int, text: str):
+                """Callback für Live-Progress-Updates."""
+                progress = current / total_batches if total_batches > 0 else 1.0
+                progress_container.progress(progress, text=f"Batch {current}/{total_batches}")
+                status_text.caption(text)
+            
+            status_text.caption(f"✨ {get_active_provider_name()} startet Analyse...")
+            review_result = review_dataframes(
+                df_sicher, df_unsicher, df_spam,
+                progress_callback=update_progress
+            )
+            
+            # Progress-Container ausblenden nach Abschluss
+            progress_container.empty()
+            status_text.empty()
+            
+            if review_result.erfolg:
+                # KI-bereinigte DataFrames verwenden
+                df_sicher = review_result.df_sicher
+                df_unsicher = review_result.df_unsicher
+                df_spam = review_result.df_spam
                 
-                if review_result.erfolg:
-                    # KI-bereinigte DataFrames verwenden
-                    df_sicher = review_result.df_sicher
-                    df_unsicher = review_result.df_unsicher
-                    df_spam = review_result.df_spam
-                    
-                    # Session State speichern (mit KI-Korrekturen)
-                    st.session_state["data_sicher"] = df_sicher
-                    st.session_state["data_unsicher"] = df_unsicher
-                    st.session_state["data_spam"] = df_spam
-                    st.session_state["datei_name"] = uploaded_file.name
-                    st.session_state["analyse_done"] = True
-                    
-                    st.session_state["ki_verschiebungen"] = review_result.verschiebungen
-                    st.session_state["ki_erfolg"] = True
-                    
-                    # Original-Daten für Excel-Export speichern
-                    st.session_state["data_sicher_original"] = review_result.df_sicher_original
-                    st.session_state["data_unsicher_original"] = review_result.df_unsicher_original
-                    st.session_state["data_spam_original"] = review_result.df_spam_original
-                else:
-                    # KI-Fehler: Fehlermeldung speichern, keine Ergebnisse anzeigen
-                    st.session_state["ki_erfolg"] = False
-                    st.session_state["ki_fehler"] = review_result.fehler_msg
-                    st.session_state["analyse_done"] = False
+                # Session State speichern (mit KI-Korrekturen)
+                st.session_state["data_sicher"] = df_sicher
+                st.session_state["data_unsicher"] = df_unsicher
+                st.session_state["data_spam"] = df_spam
+                st.session_state["datei_name"] = uploaded_file.name
+                st.session_state["analyse_done"] = True
+                
+                st.session_state["ki_verschiebungen"] = review_result.verschiebungen
+                st.session_state["ki_erfolg"] = True
+                
+                # Original-Daten für Excel-Export speichern
+                st.session_state["data_sicher_original"] = review_result.df_sicher_original
+                st.session_state["data_unsicher_original"] = review_result.df_unsicher_original
+                st.session_state["data_spam_original"] = review_result.df_spam_original
+            else:
+                # KI-Fehler: Fehlermeldung speichern, keine Ergebnisse anzeigen
+                st.session_state["ki_erfolg"] = False
+                st.session_state["ki_fehler"] = review_result.fehler_msg
+                st.session_state["analyse_done"] = False
 
 # --- FEHLERANZEIGE BEI KI-PROBLEM ---
 if st.session_state.get("ki_erfolg") == False:
@@ -122,8 +139,8 @@ if st.session_state.get("analyse_done", False):
     display_unsicher = prepare_for_display(st.session_state["data_unsicher"])
     display_spam = prepare_for_display(st.session_state["data_spam"])
     
-    # Tabs
-    tab1, tab2, tab3 = st.tabs(["🟢 Sicher", "🟡 Unsicher", "🔴 Spam"])
+    # Tabs für das Frontend
+    tab1, tab2, tab3, tab4 = st.tabs(["🟢 Sicher", "🟡 Unsicher", "🔴 Spam", "✨ KI Verschoben"])
     
     # --- TAB 1: SICHER ---
     with tab1:
@@ -169,6 +186,54 @@ if st.session_state.get("analyse_done", False):
             )
         else:
             st.info("Keine Spam-Treffer gefunden.")
+    
+    # --- TAB 4: KI VERSCHOBEN (NEU) ---
+    with tab4:
+        st.subheader("KI-Verschiebungen & Korrekturen")
+        st.caption("Übersicht aller Änderungen, die die KI vorgenommen hat, mit Begründungen.")
+        
+        ki_verschiebungen = st.session_state.get("ki_verschiebungen", [])
+        
+        if ki_verschiebungen:
+            # DataFrame für die Anzeige erstellen
+            import pandas as pd
+            logs_data = []
+            for v in ki_verschiebungen:
+                logs_data.append({
+                    "Artikelnummer": v.get("artikelnummer", ""),
+                    "Korrektur": v.get("korrektur", "") or "—",
+                    "Von": v.get("von", ""),
+                    "Nach": v.get("nach", ""),
+                    "Begründung": v.get("begruendung", "")
+                })
+            df_logs = pd.DataFrame(logs_data)
+            
+            # Statistik anzeigen
+            col_stat1, col_stat2, col_stat3 = st.columns(3)
+            with col_stat1:
+                zu_spam = sum(1 for v in ki_verschiebungen if v.get("nach", "").lower() == "spam")
+                st.metric("→ Spam", zu_spam)
+            with col_stat2:
+                zu_sicher = sum(1 for v in ki_verschiebungen if v.get("nach", "").lower() == "sicher")
+                st.metric("→ Sicher", zu_sicher)
+            with col_stat3:
+                korrekturen = sum(1 for v in ki_verschiebungen if v.get("korrektur"))
+                st.metric("Korrekturen", korrekturen)
+            
+            st.dataframe(
+                df_logs,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Artikelnummer": st.column_config.TextColumn("Original", width="medium"),
+                    "Korrektur": st.column_config.TextColumn("Korrigiert zu", width="medium"),
+                    "Von": st.column_config.TextColumn("Von", width="small"),
+                    "Nach": st.column_config.TextColumn("Nach", width="small"),
+                    "Begründung": st.column_config.TextColumn("Begründung", width="large")
+                }
+            )
+        else:
+            st.info("✅ Die KI hat keine Änderungen vorgenommen. Alle Einträge waren korrekt klassifiziert.")
     
     # --- EXPORT ---
     st.divider()

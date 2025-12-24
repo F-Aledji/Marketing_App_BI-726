@@ -2,7 +2,7 @@
 import io
 import pandas as pd
 from typing import List, Dict
-from core.config import DISPLAY_COLUMNS
+from core.config.config import DISPLAY_COLUMNS
 
 
 def _combine_dataframes(df_sicher: pd.DataFrame, df_unsicher: pd.DataFrame, df_spam: pd.DataFrame) -> pd.DataFrame:
@@ -42,15 +42,15 @@ def export_to_excel_with_logs(
 ) -> bytes:
     """
     Exportiert alle Daten in eine Excel-Datei mit 3 Sheets:
-    - Vor_KI: Original-Daten vor der KI-Analyse
-    - Nach_KI: Bereinigte Daten nach der KI-Analyse
-    - KI_Logs: Alle Verschiebungen und Korrekturen mit Begründungen
+    - Angepasst: Finale Daten nach der KI-Analyse (Hauptdaten)
+    - Original: Ursprüngliche Daten vor der KI-Analyse
+    - KI Verschiebungen: Alle Änderungen mit Begründungen
     """
     buffer = io.BytesIO()
     
     # DataFrames kombinieren
-    df_vor_ki = _combine_dataframes(df_sicher_original, df_unsicher_original, df_spam_original)
-    df_nach_ki = _combine_dataframes(df_sicher, df_unsicher, df_spam)
+    df_original = _combine_dataframes(df_sicher_original, df_unsicher_original, df_spam_original)
+    df_angepasst = _combine_dataframes(df_sicher, df_unsicher, df_spam)
     
     # KI-Logs DataFrame erstellen
     if verschiebungen:
@@ -58,7 +58,7 @@ def export_to_excel_with_logs(
         for v in verschiebungen:
             logs_data.append({
                 "Artikelnummer": v.get("artikelnummer", ""),
-                "Korrektur": v.get("korrektur", ""),
+                "Korrektur": v.get("korrektur", "") or "",
                 "Von": v.get("von", ""),
                 "Nach": v.get("nach", ""),
                 "Begründung": v.get("begruendung", "")
@@ -68,12 +68,17 @@ def export_to_excel_with_logs(
         df_logs = pd.DataFrame(columns=["Artikelnummer", "Korrektur", "Von", "Nach", "Begründung"])
     
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        _format_excel_sheet(writer, 'Vor_KI', df_vor_ki)
-        _format_excel_sheet(writer, 'Nach_KI', df_nach_ki)
-        df_logs.to_excel(writer, index=False, sheet_name='KI_Logs')
+        # Sheet 1: Angepasst (finale Daten - wird zuerst angezeigt)
+        _format_excel_sheet(writer, 'Angepasst', df_angepasst)
+        
+        # Sheet 2: Original (Daten vor KI-Analyse)
+        _format_excel_sheet(writer, 'Original', df_original)
+        
+        # Sheet 3: KI Verschiebungen (Logs)
+        df_logs.to_excel(writer, index=False, sheet_name='KI Verschiebungen')
         
         # Logs-Sheet formatieren (breitere Spalten für Begründung)
-        worksheet = writer.sheets['KI_Logs']
+        worksheet = writer.sheets['KI Verschiebungen']
         worksheet.set_column('A:A', 18)  # Artikelnummer
         worksheet.set_column('B:B', 18)  # Korrektur
         worksheet.set_column('C:C', 10)  # Von

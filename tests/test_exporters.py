@@ -8,8 +8,8 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.exporters import export_to_excel_with_logs
-from core.config import INTERNAL_COLUMNS
+from core.export.exporters import export_to_excel_with_logs
+from core.config.config import INTERNAL_COLUMNS
 
 
 class TestExportToExcelWithLogs:
@@ -51,7 +51,7 @@ class TestExportToExcelWithLogs:
             df_sicher, df_unsicher, df_spam,
             [], "test"
         )
-        df_read = pd.read_excel(BytesIO(result), sheet_name='Nach_KI')
+        df_read = pd.read_excel(BytesIO(result), sheet_name='Angepasst')
         assert not df_read.empty
     
     def test_contains_all_data(self, sample_dataframes):
@@ -61,7 +61,7 @@ class TestExportToExcelWithLogs:
             df_sicher, df_unsicher, df_spam,
             [], "test"
         )
-        df_read = pd.read_excel(BytesIO(result), sheet_name='Nach_KI')
+        df_read = pd.read_excel(BytesIO(result), sheet_name='Angepasst')
         assert len(df_read) == 5
     
     def test_has_status_column(self, sample_dataframes):
@@ -71,7 +71,7 @@ class TestExportToExcelWithLogs:
             df_sicher, df_unsicher, df_spam,
             [], "test"
         )
-        df_read = pd.read_excel(BytesIO(result), sheet_name='Nach_KI')
+        df_read = pd.read_excel(BytesIO(result), sheet_name='Angepasst')
         assert "Status" in df_read.columns
     
     def test_has_three_sheets(self, sample_dataframes):
@@ -82,9 +82,9 @@ class TestExportToExcelWithLogs:
             [], "test"
         )
         excel_file = pd.ExcelFile(BytesIO(result))
-        assert 'Vor_KI' in excel_file.sheet_names
-        assert 'Nach_KI' in excel_file.sheet_names
-        assert 'KI_Logs' in excel_file.sheet_names
+        assert 'Original' in excel_file.sheet_names
+        assert 'Angepasst' in excel_file.sheet_names
+        assert 'KI Verschiebungen' in excel_file.sheet_names
     
     def test_empty_dataframes(self):
         empty_df = pd.DataFrame(columns=["Seite", "Artikelnummer"])

@@ -3,7 +3,7 @@
 import io
 import pdfplumber
 from typing import Tuple, List
-from core.config import get_config, get_clean_string
+from core.config.config import get_config, get_clean_string
 
 
 # Prüft gegen die Filter-Logik (PATTERN_ALPHA/NUMERIC) UND gegen die geladene JSON-Blacklist

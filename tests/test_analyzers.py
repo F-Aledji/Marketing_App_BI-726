@@ -6,7 +6,8 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.analyzers import check_plausibility, analyze_context, get_clean_string
+from core.analysis.analyzers import check_plausibility, analyze_context
+from core.config.config import get_clean_string
 
 
 class TestCheckPlausibility:

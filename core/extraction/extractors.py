@@ -8,8 +8,8 @@ import streamlit as st
 from typing import Tuple, List, Dict
 from collections import Counter
 
-from core.config import PATTERN, INTERNAL_COLUMNS, get_config, get_clean_string
-from core.analyzers import check_plausibility, analyze_context
+from core.config.config import PATTERN, INTERNAL_COLUMNS, get_config, get_clean_string
+from core.analysis.analyzers import check_plausibility, analyze_context
 
 # Bereinigt den Text von problematischen Whitespace-Zeichen
 def clean_text(text: str) -> str:
@@ -63,6 +63,10 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     bytes_data = uploaded_file.getvalue()
     results = []
     
+    # Zähler für erfolgreiche Extraktion
+    pymupdf_success = False
+    pdfplumber_success = False
+    
     # 1. PyMuPDF (Fitz) - mit Kontext-Analyse
     try:
         doc = fitz.open(stream=bytes_data, filetype="pdf")
@@ -81,8 +85,22 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
             except: pass
             
             results.extend(extract_matches_from_text(text, i + 1, "PyMuPDF", config))
+        pymupdf_success = True
     except Exception as e:
-        st.error(f"⚠️ PyMuPDF Fehler: {e}")
+        error_msg = str(e).lower()
+        if "eof" in error_msg or "unexpected" in error_msg:
+            st.error("⚠️ **PDF-Datei beschädigt oder unvollständig**\n\n"
+                    "Mögliche Ursachen:\n"
+                    "- Die PDF wurde nicht vollständig heruntergeladen\n"
+                    "- Die Datei ist beschädigt\n"
+                    "- Die PDF ist passwortgeschützt\n\n"
+                    "💡 **Lösung:** Versuche die PDF erneut herunterzuladen oder öffne sie in einem PDF-Reader um sie zu überprüfen.")
+        elif "password" in error_msg or "encrypted" in error_msg:
+            st.error("🔒 **PDF ist passwortgeschützt**\n\n"
+                    "Diese PDF-Datei ist verschlüsselt und kann nicht ohne Passwort gelesen werden.\n\n"
+                    "💡 **Lösung:** Öffne die PDF in einem PDF-Reader, entsperre sie und speichere eine ungeschützte Version.")
+        else:
+            st.error(f"⚠️ PyMuPDF Fehler: {e}")
 
     # 2. pdfplumber - mit Kontext-Analyse
     try:
@@ -98,9 +116,19 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
                     
                     results.extend(extract_matches_from_text(text, i + 1, "pdfplumber", config))
                 except: continue
+        pdfplumber_success = True
     except Exception as e:
-        if "stroke color" not in str(e).lower():
-            st.error(f"⚠️ pdfplumber Fehler: {e}")
+        error_msg = str(e).lower()
+        # Nur Fehler anzeigen wenn PyMuPDF auch fehlgeschlagen ist
+        if not pymupdf_success:
+            if "eof" in error_msg or "unexpected" in error_msg:
+                if "⚠️ **PDF-Datei" not in str(st.session_state.get("_last_error", "")):
+                    st.error("⚠️ **PDF-Datei kann nicht gelesen werden**\n\n"
+                            "Die Datei scheint beschädigt oder unvollständig zu sein.\n\n"
+                            "💡 **Lösung:** Versuche die Originaldatei erneut zu öffnen oder lade sie erneut hoch.")
+        elif "stroke color" not in error_msg:
+            # Nur als Warning wenn PyMuPDF erfolgreich war
+            st.warning(f"ℹ️ pdfplumber konnte einige Inhalte nicht lesen (PyMuPDF hat funktioniert): {e}")
 
     # --- DEDUPLIZIERUNG & STATUS ---
     # Wenn keine Ergebnisse, leere DataFrames zurückgeben

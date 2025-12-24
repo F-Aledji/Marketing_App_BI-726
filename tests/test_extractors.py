@@ -6,13 +6,13 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.extractors import (
+from core.extraction.extractors import (
     clean_text,
     extract_match_groups,
     normalize,
-    get_clean_string,
     extract_matches_from_text
 )
+from core.config.config import get_clean_string
 
 
 class TestCleanText:

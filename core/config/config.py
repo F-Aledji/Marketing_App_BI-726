@@ -3,7 +3,7 @@
 import pandas as pd
 import streamlit as st
 from typing import List, Dict
-from utils import load_blacklist_config
+from core.utils.utils import load_blacklist_config
 
 
 # --- KONFIGURATION LADEN ---
