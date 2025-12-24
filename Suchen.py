@@ -11,6 +11,7 @@ load_dotenv()
 from core.config.config import get_column_config, prepare_for_display
 from core.extraction.extractors import analyze_pdf
 from core.analysis.analyzers import check_ocr_quality
+from core.analysis.verification import verify_against_reference, get_verification_stats
 from core.export.exporters import export_to_excel_with_logs
 from core.ai.reviewer import review_dataframes
 from core.ai.providers import get_active_provider_name
@@ -62,7 +63,8 @@ if uploaded_file:
             status_text.caption(f"✨ {get_active_provider_name()} startet Analyse...")
             review_result = review_dataframes(
                 df_sicher, df_unsicher, df_spam,
-                progress_callback=update_progress
+                progress_callback=update_progress,
+                dateiname=uploaded_file.name
             )
             
             # Progress-Container ausblenden nach Abschluss
@@ -75,7 +77,14 @@ if uploaded_file:
                 df_unsicher = review_result.df_unsicher
                 df_spam = review_result.df_spam
                 
-                # Session State speichern (mit KI-Korrekturen)
+                # Verifizierung gegen Referenzliste (falls geladen)
+                if st.session_state.get("reference_set"):
+                    ref_set = st.session_state["reference_set"]
+                    df_sicher = verify_against_reference(df_sicher, ref_set)
+                    df_unsicher = verify_against_reference(df_unsicher, ref_set)
+                    df_spam = verify_against_reference(df_spam, ref_set)
+                
+                # Session State speichern (mit KI-Korrekturen und ggf. Verifizierung)
                 st.session_state["data_sicher"] = df_sicher
                 st.session_state["data_unsicher"] = df_unsicher
                 st.session_state["data_spam"] = df_spam

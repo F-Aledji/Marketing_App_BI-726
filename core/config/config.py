@@ -29,6 +29,7 @@ def get_column_config() -> Dict:
     return {
         "Seite": st.column_config.NumberColumn("Seite", width="small"),
         "Artikelnummer": st.column_config.TextColumn("Artikelnummer", width="medium"),
+        "Geprüft": st.column_config.TextColumn("Geprüft", width="small"),
     }
 
 
@@ -38,8 +39,11 @@ def get_column_config() -> Dict:
 def prepare_for_display(df) -> "pd.DataFrame":
     if df.empty:
         return pd.DataFrame(columns=DISPLAY_COLUMNS)
-    # Nur Spalten behalten die in DISPLAY_COLUMNS definiert sind
-    available_cols = [col for col in DISPLAY_COLUMNS if col in df.columns]
+    # Dynamisch: DISPLAY_COLUMNS + 'Geprüft' falls vorhanden
+    display_cols = list(DISPLAY_COLUMNS)
+    if "Geprüft" in df.columns:
+        display_cols.append("Geprüft")
+    available_cols = [col for col in display_cols if col in df.columns]
     return df[available_cols].copy()
 
 

@@ -5,17 +5,15 @@
 import os
 import json
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional
 
 # =============================================================================
 # KONFIGURATION - API Keys aus Environment-Variablen
 # =============================================================================
-# Einzusetzen in einer Umgebungsvariable oder in einer .env Datei:
-# - GEMINI_API_KEY=dein_gemini_key
-# - OPENAI_API_KEY=dein_openai_key
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-
 
 # Modell-Namen
 GEMINI_MODEL = "gemini-3-flash-preview"
@@ -23,14 +21,24 @@ OPENAI_MODEL = "gpt-5.1-2025-11-13"
 
 
 # =============================================================================
+# DATENSTRUKTUR FÜR API-ANTWORT
+# =============================================================================
+
+@dataclass
+class AIResponse:
+    """Strukturierte Antwort eines AI Providers mit Token-Tracking."""
+    data: dict                  # Die geparseten Daten (verschiebungen etc.)
+    input_tokens: int = 0       # Verbrauchte Input-Tokens
+    output_tokens: int = 0      # Verbrauchte Output-Tokens
+    total_tokens: int = 0       # Gesamt-Tokens
+
+
+# =============================================================================
 # ABSTRAKTE PROVIDER-KLASSE
 # =============================================================================
 
 class AIProvider(ABC):
-    """
-    Abstrakte Basisklasse für KI-Provider.
-    Jedes Modell muss die analyze()-Methode implementieren.
-    """
+    """Abstrakte Basisklasse für KI-Provider."""
     
     @property
     @abstractmethod
@@ -39,20 +47,12 @@ class AIProvider(ABC):
         pass
     
     @abstractmethod
-    def analyze(self, user_prompt: str, system_prompt: str) -> dict:
+    def analyze(self, user_prompt: str, system_prompt: str) -> AIResponse:
         """
         Sendet den prompt an die KI und gibt das Ergebnis zurück.
         
-        Args:
-            user_prompt: Der User-Prompt mit den zu analysierenden Daten
-            system_prompt: Der System-Prompt mit den Anweisungen
-        
         Returns:
-            Dict mit "verschiebungen" Liste
-        
-        Raises:
-            ImportError: Wenn das Provider-Package nicht installiert ist
-            ValueError: Wenn der API-Key nicht gesetzt ist
+            AIResponse mit Daten und Token-Verbrauch
         """
         pass
 
@@ -62,46 +62,47 @@ class AIProvider(ABC):
 # =============================================================================
 
 class GeminiProvider(AIProvider):
-    """
-    Google Gemini 3 Flash Provider.
-    - 1M Token Input Kontext
-    - ca. 65.536 Output
-    - Günstiger als OpenAI
-    """
+    """Google Gemini 3 Flash Provider."""
     
     @property
     def name(self) -> str:
         return "Gemini 3 Flash"
     
-    def analyze(self, user_prompt: str, system_prompt: str) -> dict:
-        # Import hier um Fehler zu vermeiden wenn Package nicht installiert
+    def analyze(self, user_prompt: str, system_prompt: str) -> AIResponse:
         try:
             from google import genai
             from google.genai import types
         except ImportError:
-            raise ImportError("google-genai Package nicht installiert. Führe aus: pip install google-genai")
+            raise ImportError("google-genai Package nicht installiert. pip install google-genai")
         
-        # API Key prüfen
         if not GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY nicht gesetzt. Setze die Environment-Variable.")
+            raise ValueError("GEMINI_API_KEY nicht gesetzt.")
         
-        # Client initialisieren
         client = genai.Client(api_key=GEMINI_API_KEY)
         
-        # Anfrage senden mit JSON-Response-Format
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
-                
-                http_options={'timeout': 60000}  # Timeout in Millisekunden für google-genai
+                http_options={'timeout': 60000}
             )
         )
         
-        # Response parsen
-        return json.loads(response.text)
+        # Token-Daten extrahieren
+        input_tokens = 0
+        output_tokens = 0
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            input_tokens = getattr(response.usage_metadata, 'prompt_token_count', 0) or 0
+            output_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0) or 0
+        
+        return AIResponse(
+            data=json.loads(response.text),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens
+        )
 
 
 # =============================================================================
@@ -109,32 +110,23 @@ class GeminiProvider(AIProvider):
 # =============================================================================
 
 class OpenAIProvider(AIProvider):
-    """
-    OpenAI GPT-5.1 Provider.
-    - 400k Token Input
-    - 128k Token Output Kontext
-    - Etwas teurer als Gemini, aber oft präziser bei strukturierten Daten
-    """
+    """OpenAI GPT-5.1 Provider."""
     
     @property
     def name(self) -> str:
         return "GPT-5.1"
     
-    def analyze(self, user_prompt: str, system_prompt: str) -> dict:
-        # Import hier um Fehler zu vermeiden wenn Package nicht installiert
+    def analyze(self, user_prompt: str, system_prompt: str) -> AIResponse:
         try:
             from openai import OpenAI
         except ImportError:
-            raise ImportError("openai Package nicht installiert. Führe aus: pip install openai")
+            raise ImportError("openai Package nicht installiert. pip install openai")
         
-        # API Key prüfen
         if not OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY nicht gesetzt. Setze die Environment-Variable.")
+            raise ValueError("OPENAI_API_KEY nicht gesetzt.")
         
-        # Client initialisieren
         client = OpenAI(api_key=OPENAI_API_KEY)
         
-        # Anfrage senden mit JSON-Response-Format
         response = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
@@ -142,21 +134,31 @@ class OpenAIProvider(AIProvider):
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,  # Niedrige Temperatur für konsistente Ergebnisse
-            timeout=60.0      # Timeout in Sekunden für OpenAI
+            temperature=0.1,
+            timeout=60.0
         )
         
-        # Response parsen
-        return json.loads(response.choices[0].message.content)
+        # Token-Daten extrahieren
+        input_tokens = 0
+        output_tokens = 0
+        if response.usage:
+            input_tokens = response.usage.prompt_tokens or 0
+            output_tokens = response.usage.completion_tokens or 0
+        
+        return AIResponse(
+            data=json.loads(response.choices[0].message.content),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens
+        )
 
 
 # =============================================================================
-# PROVIDER AUSWAHL - Hier ändern um Provider zu wechseln!
+# PROVIDER AUSWAHL
 # =============================================================================
-# Kommentiere den gewünschten Provider ein/aus:
 
-# ACTIVE_PROVIDER = GeminiProvider()    # <- Gemini (experimentell, kann hängen)
-ACTIVE_PROVIDER = OpenAIProvider()      # <- OpenAI (stabil, schneller)
+# ACTIVE_PROVIDER = GeminiProvider()
+ACTIVE_PROVIDER = OpenAIProvider()
 
 
 def get_active_provider_name() -> str:

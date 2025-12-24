@@ -34,6 +34,7 @@ OUTPUT REGELN (SILENT SUCCESS):
 - Gib NIEMALS Einträge aus, die korrekt sind und nicht verändert werden müssen.
 - Melde NUR Einträge, bei denen sich die Kategorie ändert ODER eine inhaltliche Korrektur nötig ist.
 - Sparsamkeit: Halte die Begründungen kurz.
+- Verschiebe entweder nach SPAM oder Sicher. Nie nach Unsicher.
 
 ANTWORTE NUR MIT VALIDEM JSON IN DIESEM FORMAT:
 Nutze das Feld "korrektur" nur, wenn sich der Zahlenwert ändert. Das Feld "artikelnummer" ist die ID zum Finden des Eintrags und muss dem Input entsprechen.
