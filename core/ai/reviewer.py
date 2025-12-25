@@ -19,7 +19,13 @@ from core.utils.tracking import log_api_call
 # KONFIGURATION
 # =============================================================================
 
-DEFAULT_BATCH_SIZE = 200  # Anzahl Einträge pro Batch
+# Dynamische Batch-Größe je nach Provider
+# Gemini (speziell Flash) ist bei großen Batches instabiler als GPT
+if "Gemini" in ACTIVE_PROVIDER.name:
+    DEFAULT_BATCH_SIZE = 50
+else:
+    DEFAULT_BATCH_SIZE = 200
+
 MAX_PARALLEL_WORKERS = 4  # Maximale parallele API-Calls
 
 

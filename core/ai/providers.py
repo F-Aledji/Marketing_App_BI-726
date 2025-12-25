@@ -62,7 +62,7 @@ class AIProvider(ABC):
 # =============================================================================
 
 class GeminiProvider(AIProvider):
-    """Google Gemini 3 Flash Provider."""
+    """Google Gemini 3 Flash Provider. Es ist günstiger als GPT-5.1."""
     
     @property
     def name(self) -> str:
@@ -86,7 +86,8 @@ class GeminiProvider(AIProvider):
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
-                http_options={'timeout': 60000}
+                http_options={'timeout': 60000},
+                thinking_config=types.ThinkingConfig(thinking_level="high")
             )
         )
         
@@ -157,8 +158,8 @@ class OpenAIProvider(AIProvider):
 # PROVIDER AUSWAHL
 # =============================================================================
 
-# ACTIVE_PROVIDER = GeminiProvider()
-ACTIVE_PROVIDER = OpenAIProvider()
+ACTIVE_PROVIDER = GeminiProvider()
+#ACTIVE_PROVIDER = OpenAIProvider()
 
 
 def get_active_provider_name() -> str:
