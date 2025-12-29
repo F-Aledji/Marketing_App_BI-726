@@ -8,8 +8,8 @@ import streamlit as st
 from typing import Tuple, List, Dict
 from collections import Counter
 
-from core.config.config import PATTERN, INTERNAL_COLUMNS, get_config, get_clean_string
-from core.analysis.analyzers import check_plausibility, analyze_context
+from .. import config
+from .. import analysis
 
 # Bereinigt den Text von problematischen Whitespace-Zeichen
 def clean_text(text: str) -> str:
@@ -29,9 +29,9 @@ def normalize(p1: str, p2: str, p3: str) -> str:
 
 # Die Funktion wird sowohl von PyMuPDF als auch von pdfplumber genutzt
 # Die Ausgabe ist eine Liste von Dictionaries mit den Match-Informationen
-def extract_matches_from_text(text: str, page_num: int, source: str, config: dict = None) -> List[Dict]:
-    if config is None:
-        config = get_config()
+def extract_matches_from_text(text: str, page_num: int, source: str, cfg: dict = None) -> List[Dict]:
+    if cfg is None:
+        cfg = config.get_config()
     
     matches = []
     text = clean_text(text)
@@ -39,14 +39,14 @@ def extract_matches_from_text(text: str, page_num: int, source: str, config: dic
     if not text or len(text.strip()) < 5:
         return matches
     
-    for m in re.finditer(PATTERN, text):
+    for m in re.finditer(config.PATTERN, text):
         match_tuple = m.groups()
         p1, p2, p3 = extract_match_groups(match_tuple)
-        if check_plausibility((p1, p2, p3), config):
-            context_status, context_str = analyze_context(text, m.start(), m.end(), config)
+        if analysis.check_plausibility((p1, p2, p3), cfg):
+            context_status, context_str = analysis.analyze_context(text, m.start(), m.end(), cfg)
             matches.append({
                 "Nummer": normalize(p1, p2, p3),
-                "Clean": get_clean_string(p1, p2, p3),
+                "Clean": config.get_clean_string(p1, p2, p3),
                 "Seite": page_num,
                 "Quelle": source,
                 "Context_Status": context_status,
@@ -59,7 +59,7 @@ def extract_matches_from_text(text: str, page_num: int, source: str, config: dic
 # Input: Streamlit UploadedFile Objekt ist eine Funktion die in Streamlit genutzt werden kann
 # Output: Drei DataFrames (Sicher, Unsicher, Spam)
 def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    config = get_config()
+    cfg = config.get_config()
     bytes_data = uploaded_file.getvalue()
     results = []
     
@@ -84,7 +84,7 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
                             text += " " + span.get("text", "")
             except: pass
             
-            results.extend(extract_matches_from_text(text, i + 1, "PyMuPDF", config))
+            results.extend(extract_matches_from_text(text, i + 1, "PyMuPDF", cfg))
         pymupdf_success = True
     except Exception as e:
         error_msg = str(e).lower()
@@ -190,8 +190,8 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
         df = df.sort_values(by=["Status", "Seite", "Artikelnummer"]).reset_index(drop=True)
     
     # Aufteilen in drei DataFrames für die UI 
-    df_sicher = df[df['Status'] == 'Sicher'][INTERNAL_COLUMNS].reset_index(drop=True)
-    df_unsicher = df[df['Status'] == 'Unsicher'][INTERNAL_COLUMNS].reset_index(drop=True)
-    df_spam = df[df['Status'] == 'Spam'][INTERNAL_COLUMNS].reset_index(drop=True)
+    df_sicher = df[df['Status'] == 'Sicher'][config.INTERNAL_COLUMNS].reset_index(drop=True)
+    df_unsicher = df[df['Status'] == 'Unsicher'][config.INTERNAL_COLUMNS].reset_index(drop=True)
+    df_spam = df[df['Status'] == 'Spam'][config.INTERNAL_COLUMNS].reset_index(drop=True)
     
     return df_sicher, df_unsicher, df_spam

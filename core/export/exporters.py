@@ -2,7 +2,7 @@
 import io
 import pandas as pd
 from typing import List, Dict
-from core.config.config import DISPLAY_COLUMNS
+from .. import config
 
 
 def _combine_dataframes(df_sicher: pd.DataFrame, df_unsicher: pd.DataFrame, df_spam: pd.DataFrame) -> pd.DataFrame:
@@ -10,14 +10,14 @@ def _combine_dataframes(df_sicher: pd.DataFrame, df_unsicher: pd.DataFrame, df_s
     all_data = []
     for status, df in [("Sicher", df_sicher), ("Unsicher", df_unsicher), ("Spam", df_spam)]:
         if not df.empty:
-            available_cols = [col for col in DISPLAY_COLUMNS if col in df.columns]
+            available_cols = [col for col in config.DISPLAY_COLUMNS if col in df.columns]
             temp_df = df[available_cols].copy()
             temp_df["Status"] = status
             all_data.append(temp_df)
     
     if all_data:
         return pd.concat(all_data, ignore_index=True)
-    return pd.DataFrame(columns=DISPLAY_COLUMNS + ["Status"])
+    return pd.DataFrame(columns=config.DISPLAY_COLUMNS + ["Status"])
 
 
 def _format_excel_sheet(writer, sheet_name: str, df: pd.DataFrame):

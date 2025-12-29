@@ -3,17 +3,17 @@
 import io
 import pdfplumber
 from typing import Tuple, List
-from core.config.config import get_config, get_clean_string
+from .. import config
 
 
 # Prüft gegen die Filter-Logik (PATTERN_ALPHA/NUMERIC) UND gegen die geladene JSON-Blacklist
 # Gibt True zurück wenn die Nummer plausibel ist, False wenn sie gefiltert werden soll
-def check_plausibility(match_tuple: Tuple[str, str, str], config: dict = None) -> bool:
-    if config is None:
-        config = get_config()
+def check_plausibility(match_tuple: Tuple[str, str, str], cfg: dict = None) -> bool:
+    if cfg is None:
+        cfg = config.get_config()
     
-    bad_prefixes = config.get("bad_prefixes", [])
-    bad_numbers = config.get("bad_numbers", [])
+    bad_prefixes = cfg.get("bad_prefixes", [])
+    bad_numbers = cfg.get("bad_numbers", [])
     
     p1, p2, p3 = match_tuple
     p1_upper = p1.upper()
@@ -25,7 +25,7 @@ def check_plausibility(match_tuple: Tuple[str, str, str], config: dict = None) -
         return False
     
     # 2. JSON CHECK: Bad Numbers (Exakte Matches)
-    clean_num = get_clean_string(p1, p2, p3)
+    clean_num = config.get_clean_string(p1, p2, p3)
     if clean_num in bad_numbers: 
         return False
     
@@ -42,12 +42,12 @@ def check_plausibility(match_tuple: Tuple[str, str, str], config: dict = None) -
 # Der Kontext ist in diesem Fall 35 Zeichen vor und nach der gefundenen Nummer
 # Args: text - der gesamte Text, match_start - Start-Position des Matches, match_end - End-Position des Matches
 # Returns: Tuple von (status - "Spam_Candidate" oder "Context_OK", context_string - der extrahierte Kontext-Text)
-def analyze_context(text: str, match_start: int, match_end: int, config: dict = None) -> Tuple[str, str]:
-    if config is None:
-        config = get_config()
+def analyze_context(text: str, match_start: int, match_end: int, cfg: dict = None) -> Tuple[str, str]:
+    if cfg is None:
+        cfg = config.get_config()
     
-    context_bad_words = config.get("context_bad_words", [])
-    context_good_words = config.get("context_good_words", [])
+    context_bad_words = cfg.get("context_bad_words", [])
+    context_good_words = cfg.get("context_good_words", [])
     
     # Kontext extrahieren (35 Zeichen vor und nach)
     context_start = max(0, match_start - 35)

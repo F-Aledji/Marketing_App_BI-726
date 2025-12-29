@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from typing import Optional, Callable, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from core.ai.providers import ACTIVE_PROVIDER
-from core.ai.prompts import SYSTEM_PROMPT, build_user_prompt
-from core.utils.tracking import log_api_call
+from . import providers
+from . import prompts
+from .. import utils
 
 
 # =============================================================================
@@ -21,7 +21,7 @@ from core.utils.tracking import log_api_call
 
 # Dynamische Batch-Größe je nach Provider
 # Gemini (speziell Flash) ist bei großen Batches instabiler als GPT
-if "Gemini" in ACTIVE_PROVIDER.name:
+if "Gemini" in providers.ACTIVE_PROVIDER.name:
     DEFAULT_BATCH_SIZE = 50
 else:
     DEFAULT_BATCH_SIZE = 200
@@ -105,19 +105,19 @@ def _process_batch(
         empty_df = pd.DataFrame(columns=columns)
         
         if kategorie == "sicher":
-            user_prompt = build_user_prompt(batch_df, empty_df, empty_df)
+            user_prompt = prompts.build_user_prompt(batch_df, empty_df, empty_df)
         elif kategorie == "unsicher":
-            user_prompt = build_user_prompt(empty_df, batch_df, empty_df)
+            user_prompt = prompts.build_user_prompt(empty_df, batch_df, empty_df)
         else:
-            user_prompt = build_user_prompt(empty_df, empty_df, batch_df)
+            user_prompt = prompts.build_user_prompt(empty_df, empty_df, batch_df)
         
-        ai_response = ACTIVE_PROVIDER.analyze(user_prompt, SYSTEM_PROMPT)
+        ai_response = providers.ACTIVE_PROVIDER.analyze(user_prompt, prompts.SYSTEM_PROMPT)
         verschiebungen = ai_response.data.get("verschiebungen", [])
         
         duration = time.time() - start_time
-        log_api_call(
+        utils.log_api_call(
             dateiname=dateiname,
-            provider=ACTIVE_PROVIDER.name,
+            provider=providers.ACTIVE_PROVIDER.name,
             batch_nummer=batch_idx,
             batch_total=total_batches,
             anzahl_eintraege=len(batch_df),
@@ -131,9 +131,9 @@ def _process_batch(
         
     except Exception as e:
         duration = time.time() - start_time
-        log_api_call(
+        utils.log_api_call(
             dateiname=dateiname,
-            provider=ACTIVE_PROVIDER.name,
+            provider=providers.ACTIVE_PROVIDER.name,
             batch_nummer=batch_idx,
             batch_total=total_batches,
             anzahl_eintraege=len(batch_df),
@@ -214,13 +214,13 @@ def review_dataframes(
                 progress_callback(1, 1, "🤖 Analysiere alle Daten...")
             
             start_time = time.time()
-            user_prompt = build_user_prompt(df_sicher, df_unsicher, df_spam)
-            ai_response = ACTIVE_PROVIDER.analyze(user_prompt, SYSTEM_PROMPT)
+            user_prompt = prompts.build_user_prompt(df_sicher, df_unsicher, df_spam)
+            ai_response = providers.ACTIVE_PROVIDER.analyze(user_prompt, prompts.SYSTEM_PROMPT)
             alle_verschiebungen = ai_response.data.get("verschiebungen", [])
             
-            log_api_call(
+            utils.log_api_call(
                 dateiname=dateiname,
-                provider=ACTIVE_PROVIDER.name,
+                provider=providers.ACTIVE_PROVIDER.name,
                 batch_nummer=1,
                 batch_total=1,
                 anzahl_eintraege=total,

@@ -9,7 +9,7 @@ import os
 st.set_page_config(page_title="Developer Dashboard", page_icon="🔧", layout="wide")
 
 # Import NACH page_config
-from core.utils.tracking import get_tracking_stats
+from core import utils
 
 st.title("🔧 Developer Dashboard")
 st.caption("Internes Monitoring für API-Nutzung und Kosten - Nur für Entwickler")
@@ -51,7 +51,7 @@ st.sidebar.info(f"💡 Input: ${input_cost_per_token:.8f}/Token\n\nOutput: ${out
 # DATEN LADEN
 # =============================================================================
 
-stats = get_tracking_stats()
+stats = utils.get_tracking_stats()
 
 # =============================================================================
 # METRIKEN

@@ -2,7 +2,7 @@
 # Enthält die Sidebar-Komponenten inkl. Referenz-Upload
 
 import streamlit as st
-from core.analysis.verification import load_reference_list
+from .. import analysis
 
 
 def show_sidebar():
@@ -26,7 +26,7 @@ def show_sidebar():
         
         if ref_file:
             try:
-                reference_set = load_reference_list(ref_file)
+                reference_set = analysis.load_reference_list(ref_file)
                 st.session_state["reference_set"] = reference_set
                 st.success(f"✅ {len(reference_set)} Referenz-Nummern geladen")
             except Exception as e:

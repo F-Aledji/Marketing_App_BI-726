@@ -1,9 +1,9 @@
 import streamlit as st
-from sidebar import show_sidebar
+from core import ui
 
 # Konfiguration der Seite
 st.set_page_config(page_title="Infos", page_icon="ℹ️", layout="wide")
-show_sidebar()
+ui.show_sidebar()
 
 
 

@@ -10,17 +10,7 @@ load_dotenv()
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # Core-Module
-from core.config.config import get_column_config, prepare_for_display
-from core.extraction.extractors import analyze_pdf
-from core.analysis.analyzers import check_ocr_quality
-from core.export.exporters import export_to_excel_with_logs
-from core.ai.reviewer import review_dataframes
-from core.ai.providers import get_active_provider_name
-
-# UI-Module
-from core.ui.sidebar import show_sidebar
-from core.ui.state import save_analysis_results, save_analysis_error, get_display_dataframes
-from core.ui.tabs import render_data_tab, render_ki_verschiebungen_tab, render_ki_hinweis
+from core import config, extraction, analysis, export, ai, ui
 
 # =============================================================================
 # HELPER FUNCTIONS (First for Script Execution)
@@ -32,11 +22,11 @@ def _run_analysis(uploaded_file) -> None:
         bytes_data = uploaded_file.getvalue()
         
         # OCR-Qualitätsprüfung
-        if check_ocr_quality(bytes_data):
+        if analysis.check_ocr_quality(bytes_data):
             st.warning("⚠️ **Achtung:** Gescannte Datei erkannt. Ergebnisse könnten unvollständig sein.")
         
         # PDF-Extraktion
-        df_sicher, df_unsicher, df_spam = analyze_pdf(uploaded_file)
+        df_sicher, df_unsicher, df_spam = extraction.analyze_pdf(uploaded_file)
         total = len(df_sicher) + len(df_unsicher) + len(df_spam)
         
         if total == 0:
@@ -55,8 +45,8 @@ def _run_analysis(uploaded_file) -> None:
         progress_container.progress(progress, text=f"Batch {current}/{total_batches}")
         status_text.caption(text)
     
-    status_text.caption(f"✨ {get_active_provider_name()} startet Analyse...")
-    review_result = review_dataframes(
+    status_text.caption(f"✨ {ai.get_active_provider_name()} startet Analyse...")
+    review_result = ai.review_dataframes(
         df_sicher, df_unsicher, df_spam,
         progress_callback=update_progress,
         dateiname=uploaded_file.name
@@ -67,13 +57,13 @@ def _run_analysis(uploaded_file) -> None:
     
     # Ergebnis speichern
     if review_result.erfolg:
-        save_analysis_results(
+        ui.save_analysis_results(
             review_result,
             uploaded_file.name,
             st.session_state.get("reference_set")
         )
     else:
-        save_analysis_error(review_result.fehler_msg)
+        ui.save_analysis_error(review_result.fehler_msg)
 
 
 def _render_export_section(display_sicher, display_unsicher, display_spam) -> None:
@@ -81,10 +71,10 @@ def _render_export_section(display_sicher, display_unsicher, display_spam) -> No
     st.divider()
     st.subheader("📥 Excel Export")
     
-    excel_data = export_to_excel_with_logs(
-        prepare_for_display(st.session_state.get("data_sicher_original", display_sicher)),
-        prepare_for_display(st.session_state.get("data_unsicher_original", display_unsicher)),
-        prepare_for_display(st.session_state.get("data_spam_original", display_spam)),
+    excel_data = export.export_to_excel_with_logs(
+        config.prepare_for_display(st.session_state.get("data_sicher_original", display_sicher)),
+        config.prepare_for_display(st.session_state.get("data_unsicher_original", display_unsicher)),
+        config.prepare_for_display(st.session_state.get("data_spam_original", display_spam)),
         display_sicher,
         display_unsicher,
         display_spam,
@@ -105,7 +95,7 @@ def _render_results() -> None:
     st.divider()
     
     ki_verschiebungen = st.session_state.get("ki_verschiebungen", [])
-    render_ki_hinweis(ki_verschiebungen)
+    ui.render_ki_hinweis(ki_verschiebungen)
     
     # Metriken
     col1, col2, col3 = st.columns(3)
@@ -117,23 +107,23 @@ def _render_results() -> None:
         st.metric("🔴 Spam", len(st.session_state.get("data_spam", [])))
     
     # Display-Daten und Config
-    display_sicher, display_unsicher, display_spam = get_display_dataframes()
-    column_config = get_column_config()
+    display_sicher, display_unsicher, display_spam = ui.get_display_dataframes()
+    column_config = config.get_column_config()
     
     # Tabs
     tab1, tab2, tab3, tab4 = st.tabs(["🟢 Sicher", "🟡 Unsicher", "🔴 Spam", "✨ KI Verschoben"])
     
     with tab1:
-        render_data_tab("Sichere Treffer", "Von beiden Engines gefunden und KI-geprüft.", display_sicher, column_config)
+        ui.render_data_tab("Sichere Treffer", "Von beiden Engines gefunden und KI-geprüft.", display_sicher, column_config)
     
     with tab2:
-        render_data_tab("Unsichere Treffer", "Nur von einer Engine gefunden. Bitte prüfen.", display_unsicher, column_config)
+        ui.render_data_tab("Unsichere Treffer", "Nur von einer Engine gefunden. Bitte prüfen.", display_unsicher, column_config)
     
     with tab3:
-        render_data_tab("Spam / Falsch-Positive", "Als Spam erkannt (Telefon, HRB, etc.).", display_spam, column_config)
+        ui.render_data_tab("Spam / Falsch-Positive", "Als Spam erkannt (Telefon, HRB, etc.).", display_spam, column_config)
     
     with tab4:
-        render_ki_verschiebungen_tab(ki_verschiebungen)
+        ui.render_ki_verschiebungen_tab(ki_verschiebungen)
     
     # Export
     _render_export_section(display_sicher, display_unsicher, display_spam)
@@ -145,7 +135,7 @@ def _render_results() -> None:
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Artikelnummer Suche", page_icon="🎯", layout="wide")
-show_sidebar()
+ui.show_sidebar()
 
 # --- HEADER ---
 st.title("WS Artikelnummer-Suche App")

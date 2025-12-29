@@ -5,12 +5,12 @@ import streamlit as st
 import pandas as pd
 from typing import Optional, Set
 
-from core.ai.reviewer import ReviewResult
-from core.analysis.verification import verify_against_reference
+from .. import ai
+from .. import analysis
 
 
 def save_analysis_results(
-    review_result: ReviewResult,
+    review_result: ai.ReviewResult,
     dateiname: str,
     reference_set: Optional[Set[str]] = None
 ) -> None:
@@ -29,9 +29,9 @@ def save_analysis_results(
     
     # Verifizierung gegen Referenzliste (falls geladen)
     if reference_set:
-        df_sicher = verify_against_reference(df_sicher, reference_set)
-        df_unsicher = verify_against_reference(df_unsicher, reference_set)
-        df_spam = verify_against_reference(df_spam, reference_set)
+        df_sicher = analysis.verify_against_reference(df_sicher, reference_set)
+        df_unsicher = analysis.verify_against_reference(df_unsicher, reference_set)
+        df_spam = analysis.verify_against_reference(df_spam, reference_set)
     
     # Aktuelle Daten speichern
     st.session_state["data_sicher"] = df_sicher
@@ -69,10 +69,10 @@ def get_display_dataframes() -> tuple:
     Returns:
         Tuple (df_sicher, df_unsicher, df_spam)
     """
-    from core.config.config import prepare_for_display
+    from .. import config
     
     return (
-        prepare_for_display(st.session_state.get("data_sicher", pd.DataFrame())),
-        prepare_for_display(st.session_state.get("data_unsicher", pd.DataFrame())),
-        prepare_for_display(st.session_state.get("data_spam", pd.DataFrame()))
+        config.prepare_for_display(st.session_state.get("data_sicher", pd.DataFrame())),
+        config.prepare_for_display(st.session_state.get("data_unsicher", pd.DataFrame())),
+        config.prepare_for_display(st.session_state.get("data_spam", pd.DataFrame()))
     )
