@@ -12,10 +12,10 @@ from typing import List, Dict
 
 DATA_DIR = "data"
 BLACKLIST_FILE = os.path.join(DATA_DIR, "blacklist.json")
-
-# Regex Pattern für die Extraktion der Artikelnummern
-PATTERN_ALPHA = r"(?<![A-Z])([A-Z]{2,4})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})(?!\d)"
-PATTERN_NUMERIC = r"(?<!\d)(\d{2})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})(?!\d)"
+# Alpha-Teil: Erkennt 3 bis 5 Buchstaben
+PATTERN_ALPHA = r"(?<![A-Z])([A-Z]{3,5})[\s\u00A0]{1,3}(\d{3})[\s\u00A0]{1,3}(\d{2})(?!\d)"
+# Numeric-Teil: Erkennt 2 oder 4 Ziffern am Anfang
+PATTERN_NUMERIC = r"(?<!\d)(\d{4}|\d{2})[\s\u00A0]{1,3}(\d{3})[\s\u00A0]{1,3}(\d{2})(?!\d)"
 PATTERN = rf"(?i)(?:{PATTERN_ALPHA})|(?:{PATTERN_NUMERIC})"
 
 # Spalten-Konstanten
