@@ -18,6 +18,19 @@ PATTERN_ALPHA = r"(?<![A-Z])([A-Z]{2,4})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})
 PATTERN_NUMERIC = r"(?<!\d)(\d{2})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})(?!\d)"
 PATTERN = rf"(?i)(?:{PATTERN_ALPHA})|(?:{PATTERN_NUMERIC})"
 
+# =============================================================================
+# GÜLTIGE ARTIKELNUMMER-PRÄFIXE
+# =============================================================================
+# WICHTIG: Hier die gültigen Präfixe eurer Artikelnummern eintragen!
+# Diese werden der KI mitgeteilt, um bessere Entscheidungen zu treffen.
+# Beispiel: ["WS", "94", "AB", "XY"]
+VALID_ARTICLE_PREFIXES = [
+    # <- HIER EURE PRÄFIXE EINTRAGEN, z.B.:
+    # "WS",
+    # "94",
+    # "AB",
+]
+
 # Spalten-Konstanten
 INTERNAL_COLUMNS: List[str] = ["Seite", "Artikelnummer", "Kontext"]
 DISPLAY_COLUMNS: List[str] = ["Seite", "Artikelnummer"]
@@ -66,7 +79,6 @@ def get_column_config() -> Dict:
     return {
         "Seite": st.column_config.NumberColumn("Seite", width="small"),
         "Artikelnummer": st.column_config.TextColumn("Artikelnummer", width="medium"),
-        "Geprüft": st.column_config.TextColumn("Geprüft", width="small"),
     }
 
 
@@ -75,11 +87,7 @@ def prepare_for_display(df) -> "pd.DataFrame":
     if df.empty:
         return pd.DataFrame(columns=DISPLAY_COLUMNS)
     
-    display_cols = list(DISPLAY_COLUMNS)
-    if "Geprüft" in df.columns:
-        display_cols.append("Geprüft")
-    
-    available_cols = [col for col in display_cols if col in df.columns]
+    available_cols = [col for col in DISPLAY_COLUMNS if col in df.columns]
     return df[available_cols].copy()
 
 

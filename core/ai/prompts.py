@@ -2,6 +2,7 @@
 # Enthält die System-Prompts und Prompt-Building-Logik für die KI-Analyse.
 
 import pandas as pd
+from core.config.config import VALID_ARTICLE_PREFIXES
 
 
 # =============================================================================
@@ -10,13 +11,27 @@ import pandas as pd
 # Der Prompt wird an beide Provider gleich gesendet.
 # Die KI erhält die Daten als CSV und soll Muster-Anomalien erkennen.
 
-SYSTEM_PROMPT = """Du bist ein Experte für Datenbereinigung und Artikelnummer-Analyse.
+def get_system_prompt() -> str:
+    """
+    Baut den System Prompt dynamisch mit den konfigurierten Präfixen.
+    """
+    prefix_info = ""
+    if VALID_ARTICLE_PREFIXES:
+        prefix_list = ", ".join(VALID_ARTICLE_PREFIXES)
+        prefix_info = f"""
+WICHTIGE REGEL - GÜLTIGE PRÄFIXE:
+Unsere Artikelnummern beginnen ausschließlich mit: {prefix_list}
+Wenn eine Nummer NICHT mit einem dieser Präfixe beginnt, ist sie sehr wahrscheinlich SPAM.
+Nutze diese Information zusammen mit dem Kontext für deine Entscheidung.
+"""
+    
+    return f"""Du bist ein Experte für Datenbereinigung und Artikelnummer-Analyse.
 Du erhältst drei Listen von Artikelnummern aus einer PDF-Extraktion:
 
 1. SICHER: Nummern die von beiden Extraktions-Engines gefunden wurden.
 2. UNSICHER: Nummern die nur von einer Engine gefunden wurden.
 3. SPAM: Verdachtsfälle (falsch-positiv, Telefonnummern, Datum, Häufigkeit >10).
-
+{prefix_info}
 DEINE AUFGABE:
 1. Analysiere das dominante Nummern-Muster PRO SEITE.
 2. Identifiziere Ausreißer, die nicht ins Muster der Seite passen.
@@ -39,25 +54,29 @@ OUTPUT REGELN (SILENT SUCCESS):
 ANTWORTE NUR MIT VALIDEM JSON IN DIESEM FORMAT:
 Nutze das Feld "korrektur" nur, wenn sich der Zahlenwert ändert. Das Feld "artikelnummer" ist die ID zum Finden des Eintrags und muss dem Input entsprechen.
 
-{
+{{
     "verschiebungen": [
-        {
+        {{
             "artikelnummer": "ab 247 10",
             "korrektur": "94 247 10",
             "von": "Sicher",
             "nach": "Sicher",
             "begruendung": "Fragment im Kontext korrigiert, passt nun zum Seitenmuster."
-        },
-        {
+        }},
+        {{
             "artikelnummer": "030 123456",
             "von": "Unsicher",
             "nach": "Spam",
             "begruendung": "Telefonnummer erkannt."
-        }
+        }}
     ]
-}
+}}
 
-Falls keine Fehler gefunden wurden, antworte exakt mit: {"verschiebungen": []}"""
+Falls keine Fehler gefunden wurden, antworte exakt mit: {{"verschiebungen": []}}"""
+
+
+# Legacy constant for backwards compatibility (use get_system_prompt() instead)
+SYSTEM_PROMPT = get_system_prompt()
 
 
 # =============================================================================

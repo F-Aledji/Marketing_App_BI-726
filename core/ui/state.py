@@ -3,16 +3,13 @@
 
 import streamlit as st
 import pandas as pd
-from typing import Optional, Set
 
 from core.ai.reviewer import ReviewResult
-from core.analysis.verification import verify_against_reference
 
 
 def save_analysis_results(
     review_result: ReviewResult,
-    dateiname: str,
-    reference_set: Optional[Set[str]] = None
+    dateiname: str
 ) -> None:
     """
     Speichert alle Analyseergebnisse in den Session State.
@@ -20,18 +17,11 @@ def save_analysis_results(
     Args:
         review_result: Das Ergebnis der KI-Analyse
         dateiname: Name der analysierten Datei
-        reference_set: Optional, Set mit Referenz-Artikelnummern für Verifizierung
     """
     # KI-bereinigte DataFrames
     df_sicher = review_result.df_sicher
     df_unsicher = review_result.df_unsicher
     df_spam = review_result.df_spam
-    
-    # Verifizierung gegen Referenzliste (falls geladen)
-    if reference_set:
-        df_sicher = verify_against_reference(df_sicher, reference_set)
-        df_unsicher = verify_against_reference(df_unsicher, reference_set)
-        df_spam = verify_against_reference(df_spam, reference_set)
     
     # Aktuelle Daten speichern
     st.session_state["data_sicher"] = df_sicher

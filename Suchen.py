@@ -69,8 +69,7 @@ def _run_analysis(uploaded_file) -> None:
     if review_result.erfolg:
         save_analysis_results(
             review_result,
-            uploaded_file.name,
-            st.session_state.get("reference_set")
+            uploaded_file.name
         )
     else:
         save_analysis_error(review_result.fehler_msg)
