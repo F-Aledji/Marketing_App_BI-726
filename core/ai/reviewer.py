@@ -214,25 +214,48 @@ def review_dataframes(
                 progress_callback(1, 1, "🤖 Analysiere alle Daten...")
             
             start_time = time.time()
-            user_prompt = build_user_prompt(df_sicher, df_unsicher, df_spam)
-            ai_response = ACTIVE_PROVIDER.analyze(user_prompt, SYSTEM_PROMPT)
-            alle_verschiebungen = ai_response.data.get("verschiebungen", [])
-            
-            log_api_call(
-                dateiname=dateiname,
-                provider=ACTIVE_PROVIDER.name,
-                batch_nummer=1,
-                batch_total=1,
-                anzahl_eintraege=total,
-                dauer_sekunden=time.time() - start_time,
-                status="success",
-                input_tokens=ai_response.input_tokens,
-                output_tokens=ai_response.output_tokens
-            )
+            try:
+                user_prompt = build_user_prompt(df_sicher, df_unsicher, df_spam)
+                ai_response = ACTIVE_PROVIDER.analyze(user_prompt, SYSTEM_PROMPT)
+                alle_verschiebungen = ai_response.data.get("verschiebungen", [])
+                
+                log_api_call(
+                    dateiname=dateiname,
+                    provider=ACTIVE_PROVIDER.name,
+                    batch_nummer=1,
+                    batch_total=1,
+                    anzahl_eintraege=total,
+                    dauer_sekunden=time.time() - start_time,
+                    status="success",
+                    input_tokens=ai_response.input_tokens,
+                    output_tokens=ai_response.output_tokens
+                )
+            except Exception as e:
+                log_api_call(
+                    dateiname=dateiname,
+                    provider=ACTIVE_PROVIDER.name,
+                    batch_nummer=1,
+                    batch_total=1,
+                    anzahl_eintraege=total,
+                    dauer_sekunden=time.time() - start_time,
+                    status="error",
+                    fehler_msg=str(e)
+                )
+                return ReviewResult(
+                    df_sicher_original=df_sicher_original,
+                    df_unsicher_original=df_unsicher_original,
+                    df_spam_original=df_spam_original,
+                    df_sicher=df_sicher_original,
+                    df_unsicher=df_unsicher_original,
+                    df_spam=df_spam_original,
+                    verschiebungen=[],
+                    erfolg=False,
+                    fehler_msg=f"KI-Analyse fehlgeschlagen: {str(e)}"
+                )
         else:
             # Parallele Batch-Verarbeitung
             if progress_callback:
-                progress_callback(0, total_batches, f"🚀 Starte {total_batches} Batches parallel...")
+                progress_callback(0, total_batches, f"🤖 KI analysiert {total_batches} Datenpakete...")
             
             completed_count = 0
             progress_lock = threading.Lock()
@@ -245,7 +268,7 @@ def review_dataframes(
                         progress_callback(
                             completed_count, 
                             total_batches, 
-                            f"🤖 {completed_count}/{total_batches} Batches abgeschlossen..."
+                            f"🤖 KI arbeitet... {completed_count}/{total_batches} abgeschlossen"
                         )
             
             with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as executor:
@@ -264,19 +287,36 @@ def review_dataframes(
                 for future in as_completed(futures):
                     batch_idx, verschiebungen, error = future.result()
                     if error:
-                        errors.append(f"Batch {batch_idx}: {error}")
+                        errors.append(f"Datenpaket {batch_idx}: {error}")
                     else:
                         alle_verschiebungen.extend(verschiebungen)
                     update_progress()
                 
-                if errors:
-                    # Bei Fehlern trotzdem fortfahren, aber loggen
-                    pass  # Errors sind bereits geloggt
+                # Fehlerbehandlung: Wenn ALLE Batches fehlgeschlagen sind
+                if errors and len(errors) == total_batches:
+                    # Extrahiere die erste Fehlermeldung für den User
+                    first_error = errors[0] if errors else "Unbekannter Fehler"
+                    return ReviewResult(
+                        df_sicher_original=df_sicher_original,
+                        df_unsicher_original=df_unsicher_original,
+                        df_spam_original=df_spam_original,
+                        df_sicher=df_sicher_original,
+                        df_unsicher=df_unsicher_original,
+                        df_spam=df_spam_original,
+                        verschiebungen=[],
+                        erfolg=False,
+                        fehler_msg=f"KI-Analyse fehlgeschlagen ({len(errors)} Datenpakete). {first_error}"
+                    )
         
         dfs = _apply_verschiebungen(dfs, alle_verschiebungen)
         
+        # Erfolgs-/Warnungsmeldung
+        success_msg = f"✅ Fertig! {len(alle_verschiebungen)} Korrekturen angewendet."
+        if 'errors' in dir() and errors and len(errors) < total_batches:
+            success_msg = f"⚠️ {len(alle_verschiebungen)} Korrekturen, aber {len(errors)} Datenpakete fehlgeschlagen."
+        
         if progress_callback:
-            progress_callback(1, 1, f"✅ Fertig! {len(alle_verschiebungen)} Korrekturen angewendet.")
+            progress_callback(1, 1, success_msg)
         
         return ReviewResult(
             df_sicher_original=df_sicher_original,

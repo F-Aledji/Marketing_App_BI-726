@@ -52,7 +52,7 @@ def _run_analysis(uploaded_file) -> None:
     
     def update_progress(current: int, total_batches: int, text: str):
         progress = current / total_batches if total_batches > 0 else 1.0
-        progress_container.progress(progress, text=f"Batch {current}/{total_batches}")
+        progress_container.progress(progress, text=f"🤖 KI prüft Daten... {current}/{total_batches}")
         status_text.caption(text)
     
     status_text.caption(f"✨ {get_active_provider_name()} startet Analyse...")
