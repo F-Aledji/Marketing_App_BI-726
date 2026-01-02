@@ -82,7 +82,8 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
                     for line in block.get("lines", []):
                         for span in line.get("spans", []):
                             text += " " + span.get("text", "")
-            except: pass
+            except Exception:
+                pass  # Dict-Extraktion optional, Fehler ignorieren
             
             results.extend(extract_matches_from_text(text, i + 1, "PyMuPDF", config))
         pymupdf_success = True
@@ -115,7 +116,8 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
                                 if cell: text += " " + str(cell)
                     
                     results.extend(extract_matches_from_text(text, i + 1, "pdfplumber", config))
-                except: continue
+                except Exception:
+                    continue  # Einzelne Seite überspringen bei Fehler
         pdfplumber_success = True
     except Exception as e:
         error_msg = str(e).lower()
