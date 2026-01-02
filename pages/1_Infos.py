@@ -19,7 +19,7 @@ Diese Anwendung extrahiert Artikelnummern aus PDF-Dateien und klassifiziert sie 
 
 ### Features
 - **Dual-Engine Extraktion:** Zwei Such-Engines werden kombiniert um eine höhere Trefferquote zu erzielen
-- **KI-Prüfung:** Automatische Erkennung von falschen Treffern mittels KI
+- **KI-Prüfung:** Erkennung von falschen Treffern mittels KI (KI's können fehler machen)
 - **3-Kategorien System:** Sicher, Unsicher, Spam(Löschkandidaten)
 
 ### Kategorien erklärt
@@ -37,7 +37,9 @@ Treffer, die auf der Blacklist für Nummern oder Präfixe stehen, werden komplet
 Treffer, in deren Umfeld "verbotene" Wörter (z.B. Tel, Fax) stehen, werden als Spam klassifiziert.
 Die Blacklist (gesperrte Prefixe, Nummern, Kontext-Wörter) wird zentral durch IT Data Analytics gepflegt.
 
-**Änderungswünsche bitte als Jira-Ticket einreichen (siehe Sidebar).**
+## Änderungswünsche..
+
+..Bitte als Jira-Ticket einreichen (siehe Sidebar).
 
 Bitte im Ticket angeben:
 - Welcher Wert soll hinzugefügt/entfernt werden?

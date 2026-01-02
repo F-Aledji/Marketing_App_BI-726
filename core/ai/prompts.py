@@ -20,8 +20,8 @@ def get_system_prompt() -> str:
         prefix_list = ", ".join(VALID_ARTICLE_PREFIXES)
         prefix_info = f"""
 WICHTIGE REGEL - GÜLTIGE PRÄFIXE:
-Unsere Artikelnummern beginnen ausschließlich mit: {prefix_list}
-Wenn eine Nummer NICHT mit einem dieser Präfixe beginnt, ist sie sehr wahrscheinlich SPAM.
+Unsere Artikelnummern beginnen mit: {prefix_list}
+Markiere Nummern ohne diese Präfixe konsequent als Spam, außer der Kontext beweist eindeutig das Gegenteil
 Nutze diese Information zusammen mit dem Kontext für deine Entscheidung.
 """
     
@@ -71,7 +71,7 @@ Nutze das Feld "korrektur" nur, wenn sich der Zahlenwert ändert. Das Feld "arti
         }}
     ]
 }}
-
+Antworte ausschließlich mit dem JSON-Objekt. Keinerlei Einleitung oder Erklärungen außerhalb des JSON.
 Falls keine Fehler gefunden wurden, antworte exakt mit: {{"verschiebungen": []}}"""
 
 

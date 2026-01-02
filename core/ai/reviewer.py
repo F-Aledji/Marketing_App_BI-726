@@ -1,12 +1,13 @@
 # AI Reviewer Module
 # Hauptmodul für die KI-gestützte Überprüfung und Korrektur von Artikelnummern.
 # Nutzt Provider aus providers.py und Prompts aus prompts.py.
+# SEITENWEISES BATCHING: Daten werden nach Seitenbereichen gruppiert für bessere Muster-Analyse.
 
 import pandas as pd
 import time
 import threading
 from dataclasses import dataclass
-from typing import Optional, Callable, List, Tuple
+from typing import Optional, Callable, List, Tuple, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from core.ai.providers import ACTIVE_PROVIDER
@@ -18,8 +19,8 @@ from core.utils.tracking import log_api_call
 # KONFIGURATION
 # =============================================================================
 
-# Batch-Größe je nach Provider (Gemini ist bei großen Batches instabiler)
-DEFAULT_BATCH_SIZE = 50 if "Gemini" in ACTIVE_PROVIDER.name else 200
+# Seiten pro Batch (KI sieht alle Kategorien pro Seitenbereich)
+PAGES_PER_BATCH = 10 if "Gemini" in ACTIVE_PROVIDER.name else 20
 MAX_PARALLEL_WORKERS = 4
 
 
@@ -45,11 +46,46 @@ class ReviewResult:
 # HILFSFUNKTIONEN
 # =============================================================================
 
-def _chunk_dataframe(df: pd.DataFrame, chunk_size: int) -> List[pd.DataFrame]:
-    """Teilt ein DataFrame in kleinere Chunks auf."""
-    if df.empty:
-        return [df]
-    return [df.iloc[i:i + chunk_size] for i in range(0, len(df), chunk_size)]
+def _create_page_batches(
+    df_sicher: pd.DataFrame,
+    df_unsicher: pd.DataFrame,
+    df_spam: pd.DataFrame,
+    pages_per_batch: int = PAGES_PER_BATCH
+) -> List[Tuple[int, pd.DataFrame, pd.DataFrame, pd.DataFrame]]:
+    """
+    Erstellt Batches nach Seitenbereichen statt nach Kategorien.
+    
+    Returns:
+        Liste von (batch_idx, df_sicher_chunk, df_unsicher_chunk, df_spam_chunk)
+    """
+    # Alle Seiten ermitteln
+    all_pages = set()
+    for df in [df_sicher, df_unsicher, df_spam]:
+        if not df.empty and "Seite" in df.columns:
+            all_pages.update(df["Seite"].unique())
+    
+    if not all_pages:
+        return []
+    
+    # Seiten sortieren und in Gruppen aufteilen
+    sorted_pages = sorted(all_pages)
+    page_groups = [
+        sorted_pages[i:i + pages_per_batch] 
+        for i in range(0, len(sorted_pages), pages_per_batch)
+    ]
+    
+    batches = []
+    for idx, page_group in enumerate(page_groups, start=1):
+        # Für jede Seitengruppe die entsprechenden Zeilen filtern
+        sicher_chunk = df_sicher[df_sicher["Seite"].isin(page_group)] if not df_sicher.empty else pd.DataFrame()
+        unsicher_chunk = df_unsicher[df_unsicher["Seite"].isin(page_group)] if not df_unsicher.empty else pd.DataFrame()
+        spam_chunk = df_spam[df_spam["Seite"].isin(page_group)] if not df_spam.empty else pd.DataFrame()
+        
+        # Nur hinzufügen wenn mindestens ein Eintrag vorhanden
+        if len(sicher_chunk) + len(unsicher_chunk) + len(spam_chunk) > 0:
+            batches.append((idx, sicher_chunk, unsicher_chunk, spam_chunk))
+    
+    return batches
 
 
 def _apply_verschiebungen(dfs: dict, verschiebungen: list) -> dict:
@@ -94,71 +130,53 @@ def _create_error_result(
     )
 
 
-def _log_and_return_batch_result(
-    batch_idx: int,
-    batch_df: pd.DataFrame,
+def _process_page_batch(
+    batch_info: Tuple[int, pd.DataFrame, pd.DataFrame, pd.DataFrame],
     dateiname: str,
-    total_batches: int,
-    start_time: float,
-    ai_response=None,
-    error: Exception = None
+    total_batches: int
 ) -> Tuple[int, List[dict], Optional[str]]:
-    """Loggt API-Call und gibt Batch-Ergebnis zurück."""
-    duration = time.time() - start_time
+    """
+    Verarbeitet einen Seiten-Batch (alle Kategorien zusammen). Thread-safe.
     
-    if error:
+    Args:
+        batch_info: (batch_idx, df_sicher, df_unsicher, df_spam)
+    """
+    batch_idx, df_sicher, df_unsicher, df_spam = batch_info
+    start_time = time.time()
+    total_entries = len(df_sicher) + len(df_unsicher) + len(df_spam)
+    
+    try:
+        user_prompt = build_user_prompt(df_sicher, df_unsicher, df_spam)
+        ai_response = ACTIVE_PROVIDER.analyze(user_prompt, SYSTEM_PROMPT)
+        verschiebungen = ai_response.data.get("verschiebungen", [])
+        
+        duration = time.time() - start_time
         log_api_call(
             dateiname=dateiname,
             provider=ACTIVE_PROVIDER.name,
             batch_nummer=batch_idx,
             batch_total=total_batches,
-            anzahl_eintraege=len(batch_df),
+            anzahl_eintraege=total_entries,
+            dauer_sekunden=duration,
+            status="success",
+            input_tokens=ai_response.input_tokens,
+            output_tokens=ai_response.output_tokens
+        )
+        return (batch_idx, verschiebungen, None)
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        log_api_call(
+            dateiname=dateiname,
+            provider=ACTIVE_PROVIDER.name,
+            batch_nummer=batch_idx,
+            batch_total=total_batches,
+            anzahl_eintraege=total_entries,
             dauer_sekunden=duration,
             status="error",
-            fehler_msg=str(error)
+            fehler_msg=str(e)
         )
-        return (batch_idx, [], str(error))
-    
-    log_api_call(
-        dateiname=dateiname,
-        provider=ACTIVE_PROVIDER.name,
-        batch_nummer=batch_idx,
-        batch_total=total_batches,
-        anzahl_eintraege=len(batch_df),
-        dauer_sekunden=duration,
-        status="success",
-        input_tokens=ai_response.input_tokens,
-        output_tokens=ai_response.output_tokens
-    )
-    return (batch_idx, ai_response.data.get("verschiebungen", []), None)
-
-
-def _process_batch(
-    batch_info: Tuple[int, str, pd.DataFrame],
-    columns: list,
-    dateiname: str,
-    total_batches: int
-) -> Tuple[int, List[dict], Optional[str]]:
-    """Verarbeitet einen einzelnen Batch. Thread-safe."""
-    batch_idx, kategorie, batch_df = batch_info
-    start_time = time.time()
-    
-    try:
-        empty_df = pd.DataFrame(columns=columns)
-        prompts = {
-            "sicher": (batch_df, empty_df, empty_df),
-            "unsicher": (empty_df, batch_df, empty_df),
-            "spam": (empty_df, empty_df, batch_df)
-        }
-        user_prompt = build_user_prompt(*prompts[kategorie])
-        ai_response = ACTIVE_PROVIDER.analyze(user_prompt, SYSTEM_PROMPT)
-        return _log_and_return_batch_result(
-            batch_idx, batch_df, dateiname, total_batches, start_time, ai_response
-        )
-    except Exception as e:
-        return _log_and_return_batch_result(
-            batch_idx, batch_df, dateiname, total_batches, start_time, error=e
-        )
+        return (batch_idx, [], str(e))
 
 
 # =============================================================================
@@ -169,18 +187,20 @@ def review_dataframes(
     df_sicher: pd.DataFrame,
     df_unsicher: pd.DataFrame,
     df_spam: pd.DataFrame,
-    batch_size: int = DEFAULT_BATCH_SIZE,
+    pages_per_batch: int = PAGES_PER_BATCH,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     dateiname: str = "unbekannt"
 ) -> ReviewResult:
     """
     Hauptfunktion zur Überprüfung und Korrektur der DataFrames mit KI.
     
+    NEU: Seitenweises Batching - KI sieht alle Kategorien pro Seitenbereich.
+    
     Args:
         df_sicher: DataFrame mit sicheren Treffern
         df_unsicher: DataFrame mit unsicheren Treffern
         df_spam: DataFrame mit Spam-Treffern
-        batch_size: Anzahl Einträge pro Datenpaket
+        pages_per_batch: Anzahl Seiten pro Datenpaket
         progress_callback: Funktion(current, total, text) für UI-Updates
         dateiname: Name der Datei für Tracking-Logs
     
@@ -214,17 +234,17 @@ def review_dataframes(
         alle_verschiebungen = []
         errors = []
         
-        # Datenpakete erstellen
-        batches = []
-        for kategorie in ["sicher", "unsicher", "spam"]:
-            for chunk in _chunk_dataframe(dfs[kategorie], batch_size):
-                if not chunk.empty:
-                    batches.append((len(batches) + 1, kategorie, chunk))
-        
+        # Seiten-Batches erstellen
+        batches = _create_page_batches(df_sicher, df_unsicher, df_spam, pages_per_batch)
         total_batches = len(batches)
         
+        # Falls keine Batches (z.B. leere Seiten-Spalte), Single-Call
+        if total_batches == 0:
+            total_batches = 1
+            batches = [(1, df_sicher, df_unsicher, df_spam)]
+        
         # === SINGLE-CALL für kleine Datensätze ===
-        if total <= batch_size * 3 or total_batches <= 1:
+        if total_batches <= 1:
             if progress_callback:
                 progress_callback(1, 1, "🤖 Analysiere alle Daten...")
             
@@ -264,7 +284,7 @@ def review_dataframes(
         # === PARALLELE VERARBEITUNG für große Datensätze ===
         else:
             if progress_callback:
-                progress_callback(0, total_batches, f"🤖 KI analysiert {total_batches} Datenpakete...")
+                progress_callback(0, total_batches, f"🤖 KI analysiert {total_batches} Seitenbereiche...")
             
             completed_count = 0
             progress_lock = threading.Lock()
@@ -282,14 +302,14 @@ def review_dataframes(
             with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as executor:
                 futures = {
                     executor.submit(
-                        _process_batch, batch, df_sicher.columns.tolist(), dateiname, total_batches
+                        _process_page_batch, batch, dateiname, total_batches
                     ): batch[0] for batch in batches
                 }
                 
                 for future in as_completed(futures):
                     batch_idx, verschiebungen, error = future.result()
                     if error:
-                        errors.append(f"Datenpaket {batch_idx}: {error}")
+                        errors.append(f"Seitenbereich {batch_idx}: {error}")
                     else:
                         alle_verschiebungen.extend(verschiebungen)
                     update_progress()
@@ -298,7 +318,7 @@ def review_dataframes(
                 if errors and len(errors) == total_batches:
                     return _create_error_result(
                         originals["sicher"], originals["unsicher"], originals["spam"],
-                        f"KI-Analyse fehlgeschlagen ({len(errors)} Datenpakete). {errors[0]}"
+                        f"KI-Analyse fehlgeschlagen ({len(errors)} Seitenbereiche). {errors[0]}"
                     )
         
         # Verschiebungen anwenden
@@ -307,7 +327,7 @@ def review_dataframes(
         # Erfolgs-/Warnungsmeldung
         success_msg = f"✅ Fertig! {len(alle_verschiebungen)} Korrekturen angewendet."
         if errors and len(errors) < total_batches:
-            success_msg = f"⚠️ {len(alle_verschiebungen)} Korrekturen, aber {len(errors)} Datenpakete fehlgeschlagen."
+            success_msg = f"⚠️ {len(alle_verschiebungen)} Korrekturen, aber {len(errors)} Seitenbereiche fehlgeschlagen."
         
         if progress_callback:
             progress_callback(1, 1, success_msg)

@@ -1,5 +1,5 @@
 # WS Bestellnummer Suche App
-# Refactored Version - Clean Architecture
+
 
 import streamlit as st
 import pandas as pd
