@@ -1,12 +1,16 @@
 # PDF Extraktionen und Analyse der Artikelnummern
 import io
 import re
+import warnings
 import fitz  # PyMuPDF
 import pdfplumber
 import pandas as pd
 import streamlit as st
 from typing import Tuple, List, Dict
 from collections import Counter
+
+# pdfplumber "stroke color" Warnungen unterdrücken (harmlos bei bestimmten PDFs)
+warnings.filterwarnings("ignore", message=".*stroke color.*")
 
 from core.config.config import PATTERN, INTERNAL_COLUMNS, get_config, get_clean_string
 from core.analysis.analyzers import check_plausibility, analyze_context

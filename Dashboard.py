@@ -144,7 +144,7 @@ if logs:
     
     st.dataframe(
         df_logs,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 else:
@@ -166,7 +166,7 @@ if logs and len(logs) >= 2:
     
     if not df_chart.empty:
         df_chart = df_chart.set_index("timestamp")
-        st.line_chart(df_chart["dauer_sekunden"], use_container_width=True)
+        st.line_chart(df_chart["dauer_sekunden"], width="stretch")
     else:
         st.caption("Keine gültigen Daten für eine Grafik.")
 else:

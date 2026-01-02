@@ -27,7 +27,7 @@ def render_data_tab(
     if not data.empty:
         st.dataframe(
             data,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config=column_config
         )
@@ -76,7 +76,7 @@ def render_ki_verschiebungen_tab(verschiebungen: List[Dict[str, Any]]) -> None:
     
     st.dataframe(
         df_logs,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Artikelnummer": st.column_config.TextColumn("Original", width="medium"),
