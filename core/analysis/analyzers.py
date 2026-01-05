@@ -6,34 +6,29 @@ from typing import Tuple, List
 from core.config.config import get_config, get_clean_string
 
 
-# Prüft gegen die Filter-Logik (PATTERN_ALPHA/NUMERIC) UND gegen die geladene JSON-Blacklist
-# Gibt True zurück wenn die Nummer plausibel ist, False wenn sie gefiltert werden soll
+# Prüft gegen harte Filter-Regeln (Telefon, Jahre, bekannte Fehlnummern)
+# Gibt True zurück wenn die Nummer extrahiert werden soll, False wenn sie komplett ignoriert wird
+# HINWEIS: Soft-Prefix-Klassifikation (bad_prefixes, valid_prefixes) erfolgt in extractors.py
 def check_plausibility(match_tuple: Tuple[str, str, str], config: dict = None) -> bool:
     if config is None:
         config = get_config()
     
-    bad_prefixes = config.get("bad_prefixes", [])
     bad_numbers = config.get("bad_numbers", [])
     
     p1, p2, p3 = match_tuple
-    p1_upper = p1.upper()
     
-    # 1. Hard-Checks (Telefon, Jahr)
+    # 1. Hard-Checks (Telefon mit 0, Jahreszahlen)
     if p1.startswith("0"): 
         return False
-    if p1 in ["2023", "2024", "2025", "2026"]: 
+    if p1 in ["2023", "2024", "2025", "2026", "2027"]: 
         return False
     
-    # 2. JSON CHECK: Bad Numbers (Exakte Matches)
+    # 2. JSON CHECK: Bad Numbers (Exakte Matches - bekannte Fehlnummern)
     clean_num = get_clean_string(p1, p2, p3)
     if clean_num in bad_numbers: 
         return False
     
-    # 3. JSON CHECK: Bad Prefixes (Startet mit...)
-    for bad_prefix in bad_prefixes:
-        if p1_upper.startswith(bad_prefix):
-            return False
-            
+    # Alle anderen Nummern werden extrahiert, Präfix-Klassifikation erfolgt später
     return True
 
 # Das ist die Kontextanalyse um zu prüfen ob die Nummer in einem "guten" oder "schlechten" Kontext steht
@@ -41,7 +36,7 @@ def check_plausibility(match_tuple: Tuple[str, str, str], config: dict = None) -
 # Während "Art", "Best" gute Indikatoren sind
 # Der Kontext ist in diesem Fall 35 Zeichen vor und nach der gefundenen Nummer
 # Args: text - der gesamte Text, match_start - Start-Position des Matches, match_end - End-Position des Matches
-# Returns: Tuple von (status - "Spam_Candidate" oder "Context_OK", context_string - der extrahierte Kontext-Text)
+# Returns: Tuple von (status - "Sehr_Unsicher_Candidate" oder "Context_OK", context_string - der extrahierte Kontext-Text)
 def analyze_context(text: str, match_start: int, match_end: int, config: dict = None) -> Tuple[str, str]:
     if config is None:
         config = get_config()
@@ -77,7 +72,7 @@ def analyze_context(text: str, match_start: int, match_end: int, config: dict = 
     if bad_word_distance < float('inf'):
         if good_word_distance < bad_word_distance:
             return "Context_OK", context
-        return "Spam_Candidate", context
+        return "Sehr_Unsicher_Candidate", context
     
     return "Context_OK", context
 

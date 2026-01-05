@@ -33,10 +33,10 @@ class ReviewResult:
     """Ergebnis der KI-Analyse mit bereinigten DataFrames und Verschiebungen."""
     df_sicher_original: pd.DataFrame
     df_unsicher_original: pd.DataFrame
-    df_spam_original: pd.DataFrame
+    df_sehr_unsicher_original: pd.DataFrame
     df_sicher: pd.DataFrame
     df_unsicher: pd.DataFrame
-    df_spam: pd.DataFrame
+    df_sehr_unsicher: pd.DataFrame
     verschiebungen: list
     erfolg: bool = True
     fehler_msg: str = ""
@@ -49,18 +49,18 @@ class ReviewResult:
 def _create_page_batches(
     df_sicher: pd.DataFrame,
     df_unsicher: pd.DataFrame,
-    df_spam: pd.DataFrame,
+    df_sehr_unsicher: pd.DataFrame,
     pages_per_batch: int = PAGES_PER_BATCH
 ) -> List[Tuple[int, pd.DataFrame, pd.DataFrame, pd.DataFrame]]:
     """
     Erstellt Batches nach Seitenbereichen statt nach Kategorien.
     
     Returns:
-        Liste von (batch_idx, df_sicher_chunk, df_unsicher_chunk, df_spam_chunk)
+        Liste von (batch_idx, df_sicher_chunk, df_unsicher_chunk, df_sehr_unsicher_chunk)
     """
     # Alle Seiten ermitteln
     all_pages = set()
-    for df in [df_sicher, df_unsicher, df_spam]:
+    for df in [df_sicher, df_unsicher, df_sehr_unsicher]:
         if not df.empty and "Seite" in df.columns:
             all_pages.update(df["Seite"].unique())
     
@@ -79,11 +79,11 @@ def _create_page_batches(
         # Für jede Seitengruppe die entsprechenden Zeilen filtern
         sicher_chunk = df_sicher[df_sicher["Seite"].isin(page_group)] if not df_sicher.empty else pd.DataFrame()
         unsicher_chunk = df_unsicher[df_unsicher["Seite"].isin(page_group)] if not df_unsicher.empty else pd.DataFrame()
-        spam_chunk = df_spam[df_spam["Seite"].isin(page_group)] if not df_spam.empty else pd.DataFrame()
+        sehr_unsicher_chunk = df_sehr_unsicher[df_sehr_unsicher["Seite"].isin(page_group)] if not df_sehr_unsicher.empty else pd.DataFrame()
         
         # Nur hinzufügen wenn mindestens ein Eintrag vorhanden
-        if len(sicher_chunk) + len(unsicher_chunk) + len(spam_chunk) > 0:
-            batches.append((idx, sicher_chunk, unsicher_chunk, spam_chunk))
+        if len(sicher_chunk) + len(unsicher_chunk) + len(sehr_unsicher_chunk) > 0:
+            batches.append((idx, sicher_chunk, unsicher_chunk, sehr_unsicher_chunk))
     
     return batches
 
@@ -93,8 +93,8 @@ def _apply_verschiebungen(dfs: dict, verschiebungen: list) -> dict:
     for v in verschiebungen:
         artikelnummer = v.get("artikelnummer", "")
         korrektur = v.get("korrektur", "")
-        von = v.get("von", "").lower()
-        nach = v.get("nach", "").lower()
+        von = v.get("von", "").lower().replace(" ", "_")  # "Sehr Unsicher" -> "sehr_unsicher"
+        nach = v.get("nach", "").lower().replace(" ", "_")
         
         if von not in dfs or nach not in dfs:
             continue
@@ -113,17 +113,17 @@ def _apply_verschiebungen(dfs: dict, verschiebungen: list) -> dict:
 def _create_error_result(
     df_sicher_original: pd.DataFrame,
     df_unsicher_original: pd.DataFrame,
-    df_spam_original: pd.DataFrame,
+    df_sehr_unsicher_original: pd.DataFrame,
     fehler_msg: str
 ) -> ReviewResult:
     """Erstellt ein Fehler-ReviewResult mit Original-Daten."""
     return ReviewResult(
         df_sicher_original=df_sicher_original,
         df_unsicher_original=df_unsicher_original,
-        df_spam_original=df_spam_original,
+        df_sehr_unsicher_original=df_sehr_unsicher_original,
         df_sicher=df_sicher_original,
         df_unsicher=df_unsicher_original,
-        df_spam=df_spam_original,
+        df_sehr_unsicher=df_sehr_unsicher_original,
         verschiebungen=[],
         erfolg=False,
         fehler_msg=fehler_msg
@@ -139,14 +139,14 @@ def _process_page_batch(
     Verarbeitet einen Seiten-Batch (alle Kategorien zusammen). Thread-safe.
     
     Args:
-        batch_info: (batch_idx, df_sicher, df_unsicher, df_spam)
+        batch_info: (batch_idx, df_sicher, df_unsicher, df_sehr_unsicher)
     """
-    batch_idx, df_sicher, df_unsicher, df_spam = batch_info
+    batch_idx, df_sicher, df_unsicher, df_sehr_unsicher = batch_info
     start_time = time.time()
-    total_entries = len(df_sicher) + len(df_unsicher) + len(df_spam)
+    total_entries = len(df_sicher) + len(df_unsicher) + len(df_sehr_unsicher)
     
     try:
-        user_prompt = build_user_prompt(df_sicher, df_unsicher, df_spam)
+        user_prompt = build_user_prompt(df_sicher, df_unsicher, df_sehr_unsicher)
         ai_response = ACTIVE_PROVIDER.analyze(user_prompt, SYSTEM_PROMPT)
         verschiebungen = ai_response.data.get("verschiebungen", [])
         
@@ -186,7 +186,7 @@ def _process_page_batch(
 def review_dataframes(
     df_sicher: pd.DataFrame,
     df_unsicher: pd.DataFrame,
-    df_spam: pd.DataFrame,
+    df_sehr_unsicher: pd.DataFrame,
     pages_per_batch: int = PAGES_PER_BATCH,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     dateiname: str = "unbekannt"
@@ -199,7 +199,7 @@ def review_dataframes(
     Args:
         df_sicher: DataFrame mit sicheren Treffern
         df_unsicher: DataFrame mit unsicheren Treffern
-        df_spam: DataFrame mit Spam-Treffern
+        df_sehr_unsicher: DataFrame mit sehr unsicheren Treffern
         pages_per_batch: Anzahl Seiten pro Datenpaket
         progress_callback: Funktion(current, total, text) für UI-Updates
         dateiname: Name der Datei für Tracking-Logs
@@ -211,20 +211,20 @@ def review_dataframes(
     originals = {
         "sicher": df_sicher.copy(),
         "unsicher": df_unsicher.copy(),
-        "spam": df_spam.copy()
+        "sehr_unsicher": df_sehr_unsicher.copy()
     }
     
-    total = len(df_sicher) + len(df_unsicher) + len(df_spam)
+    total = len(df_sicher) + len(df_unsicher) + len(df_sehr_unsicher)
     
     # Leere Daten = Sofort zurück
     if total == 0:
         return ReviewResult(
             df_sicher_original=originals["sicher"],
             df_unsicher_original=originals["unsicher"],
-            df_spam_original=originals["spam"],
+            df_sehr_unsicher_original=originals["sehr_unsicher"],
             df_sicher=df_sicher,
             df_unsicher=df_unsicher,
-            df_spam=df_spam,
+            df_sehr_unsicher=df_sehr_unsicher,
             verschiebungen=[],
             erfolg=True
         )
@@ -235,13 +235,13 @@ def review_dataframes(
         errors = []
         
         # Seiten-Batches erstellen
-        batches = _create_page_batches(df_sicher, df_unsicher, df_spam, pages_per_batch)
+        batches = _create_page_batches(df_sicher, df_unsicher, df_sehr_unsicher, pages_per_batch)
         total_batches = len(batches)
         
         # Falls keine Batches (z.B. leere Seiten-Spalte), Single-Call
         if total_batches == 0:
             total_batches = 1
-            batches = [(1, df_sicher, df_unsicher, df_spam)]
+            batches = [(1, df_sicher, df_unsicher, df_sehr_unsicher)]
         
         # === SINGLE-CALL für kleine Datensätze ===
         if total_batches <= 1:
@@ -250,7 +250,7 @@ def review_dataframes(
             
             start_time = time.time()
             try:
-                user_prompt = build_user_prompt(df_sicher, df_unsicher, df_spam)
+                user_prompt = build_user_prompt(df_sicher, df_unsicher, df_sehr_unsicher)
                 ai_response = ACTIVE_PROVIDER.analyze(user_prompt, SYSTEM_PROMPT)
                 alle_verschiebungen = ai_response.data.get("verschiebungen", [])
                 
@@ -277,7 +277,7 @@ def review_dataframes(
                     fehler_msg=str(e)
                 )
                 return _create_error_result(
-                    originals["sicher"], originals["unsicher"], originals["spam"],
+                    originals["sicher"], originals["unsicher"], originals["sehr_unsicher"],
                     f"KI-Analyse fehlgeschlagen: {str(e)}"
                 )
         
@@ -317,7 +317,7 @@ def review_dataframes(
                 # Alle Batches fehlgeschlagen?
                 if errors and len(errors) == total_batches:
                     return _create_error_result(
-                        originals["sicher"], originals["unsicher"], originals["spam"],
+                        originals["sicher"], originals["unsicher"], originals["sehr_unsicher"],
                         f"KI-Analyse fehlgeschlagen ({len(errors)} Seitenbereiche). {errors[0]}"
                     )
         
@@ -335,17 +335,17 @@ def review_dataframes(
         return ReviewResult(
             df_sicher_original=originals["sicher"],
             df_unsicher_original=originals["unsicher"],
-            df_spam_original=originals["spam"],
+            df_sehr_unsicher_original=originals["sehr_unsicher"],
             df_sicher=dfs["sicher"],
             df_unsicher=dfs["unsicher"],
-            df_spam=dfs["spam"],
+            df_sehr_unsicher=dfs["sehr_unsicher"],
             verschiebungen=alle_verschiebungen,
             erfolg=True
         )
         
     except Exception as e:
         return _create_error_result(
-            originals["sicher"], originals["unsicher"], originals["spam"],
+            originals["sicher"], originals["unsicher"], originals["sehr_unsicher"],
             f"KI-Analyse fehlgeschlagen: {str(e)}"
         )
 

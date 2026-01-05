@@ -21,7 +21,7 @@ def get_system_prompt() -> str:
         prefix_info = f"""
 WICHTIGE REGEL - GÜLTIGE PRÄFIXE:
 Unsere Artikelnummern beginnen mit: {prefix_list}
-Markiere Nummern ohne diese Präfixe konsequent als Spam, außer der Kontext beweist eindeutig das Gegenteil
+Markiere Nummern ohne diese Präfixe konsequent als Sehr Unsicher, außer der Kontext beweist eindeutig das Gegenteil
 Nutze diese Information zusammen mit dem Kontext für deine Entscheidung.
 """
     
@@ -30,13 +30,13 @@ Du erhältst drei Listen von Artikelnummern aus einer PDF-Extraktion:
 
 1. SICHER: Nummern die von beiden Extraktions-Engines gefunden wurden.
 2. UNSICHER: Nummern die nur von einer Engine gefunden wurden.
-3. SPAM: Verdachtsfälle (falsch-positiv, Telefonnummern, Datum, Häufigkeit >10).
+3. SEHR UNSICHER: Verdachtsfälle (falsch-positiv, Telefonnummern, Datum, Häufigkeit >10).
 {prefix_info}
 DEINE AUFGABE:
 1. Analysiere das dominante Nummern-Muster PRO SEITE.
 2. Identifiziere Ausreißer, die nicht ins Muster der Seite passen.
 3. Nutze den mitgelieferten KONTEXT, um zu entscheiden:
-   - Ist es Spam? (Verschieben nach SPAM)
+   - Ist es sehr unsicher? (Verschieben nach SEHR UNSICHER)
    - Ist es ein Extraktions-Fehler? (Reparieren)
 
 REPARATUR-LOGIK (WICHTIG):
@@ -49,7 +49,7 @@ OUTPUT REGELN (SILENT SUCCESS):
 - Gib NIEMALS Einträge aus, die korrekt sind und nicht verändert werden müssen.
 - Melde NUR Einträge, bei denen sich die Kategorie ändert ODER eine inhaltliche Korrektur nötig ist.
 - Sparsamkeit: Halte die Begründungen kurz.
-- Verschiebe entweder nach SPAM oder Sicher. Nie nach Unsicher.
+- Verschiebe entweder nach SEHR UNSICHER oder Sicher. Nie nach Unsicher.
 
 ANTWORTE NUR MIT VALIDEM JSON IN DIESEM FORMAT:
 Nutze das Feld "korrektur" nur, wenn sich der Zahlenwert ändert. Das Feld "artikelnummer" ist die ID zum Finden des Eintrags und muss dem Input entsprechen.
@@ -66,7 +66,7 @@ Nutze das Feld "korrektur" nur, wenn sich der Zahlenwert ändert. Das Feld "arti
         {{
             "artikelnummer": "030 123456",
             "von": "Unsicher",
-            "nach": "Spam",
+            "nach": "Sehr Unsicher",
             "begruendung": "Telefonnummer erkannt."
         }}
     ]
@@ -86,7 +86,7 @@ SYSTEM_PROMPT = get_system_prompt()
 def build_user_prompt(
     df_sicher: pd.DataFrame, 
     df_unsicher: pd.DataFrame, 
-    df_spam: pd.DataFrame
+    df_sehr_unsicher: pd.DataFrame
 ) -> str:
     """
     Baut den User Prompt mit den CSV-Daten der drei DataFrames.
@@ -94,7 +94,7 @@ def build_user_prompt(
     Args:
         df_sicher: DataFrame mit sicheren Treffern
         df_unsicher: DataFrame mit unsicheren Treffern
-        df_spam: DataFrame mit Spam-Treffern
+        df_sehr_unsicher: DataFrame mit Sehr Unsicher-Treffern
     
     Returns:
         Formatierter String mit den CSV-Daten aller Kategorien
@@ -102,7 +102,7 @@ def build_user_prompt(
     prompt_parts = []
     
     # Jedes DataFrame als CSV-Block hinzufügen
-    for name, df in [("SICHER", df_sicher), ("UNSICHER", df_unsicher), ("SPAM", df_spam)]:
+    for name, df in [("SICHER", df_sicher), ("UNSICHER", df_unsicher), ("SEHR UNSICHER", df_sehr_unsicher)]:
         if not df.empty:
             # Nur relevante Spalten für Analyse (Seite, Artikelnummer, Kontext)
             csv_str = df.to_csv(index=False, sep=';')

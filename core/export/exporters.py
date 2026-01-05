@@ -5,10 +5,10 @@ from typing import List, Dict
 from core.config.config import DISPLAY_COLUMNS
 
 
-def _combine_dataframes(df_sicher: pd.DataFrame, df_unsicher: pd.DataFrame, df_spam: pd.DataFrame) -> pd.DataFrame:
+def _combine_dataframes(df_sicher: pd.DataFrame, df_unsicher: pd.DataFrame, df_sehr_unsicher: pd.DataFrame) -> pd.DataFrame:
     """Kombiniert alle DataFrames mit Status-Spalte."""
     all_data = []
-    for status, df in [("Sicher", df_sicher), ("Unsicher", df_unsicher), ("Spam", df_spam)]:
+    for status, df in [("Sicher", df_sicher), ("Unsicher", df_unsicher), ("Sehr Unsicher", df_sehr_unsicher)]:
         if not df.empty:
             available_cols = [col for col in DISPLAY_COLUMNS if col in df.columns]
             temp_df = df[available_cols].copy()
@@ -33,10 +33,10 @@ def _format_excel_sheet(writer, sheet_name: str, df: pd.DataFrame):
 def export_to_excel_with_logs(
     df_sicher_original: pd.DataFrame,
     df_unsicher_original: pd.DataFrame,
-    df_spam_original: pd.DataFrame,
+    df_sehr_unsicher_original: pd.DataFrame,
     df_sicher: pd.DataFrame,
     df_unsicher: pd.DataFrame,
-    df_spam: pd.DataFrame,
+    df_sehr_unsicher: pd.DataFrame,
     verschiebungen: List[Dict],
     filename: str
 ) -> bytes:
@@ -49,8 +49,8 @@ def export_to_excel_with_logs(
     buffer = io.BytesIO()
     
     # DataFrames kombinieren
-    df_original = _combine_dataframes(df_sicher_original, df_unsicher_original, df_spam_original)
-    df_angepasst = _combine_dataframes(df_sicher, df_unsicher, df_spam)
+    df_original = _combine_dataframes(df_sicher_original, df_unsicher_original, df_sehr_unsicher_original)
+    df_angepasst = _combine_dataframes(df_sicher, df_unsicher, df_sehr_unsicher)
     
     # KI-Logs DataFrame erstellen
     if verschiebungen:

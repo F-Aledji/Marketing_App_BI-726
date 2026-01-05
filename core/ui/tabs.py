@@ -55,7 +55,7 @@ def render_ki_verschiebungen_tab(verschiebungen: List[Dict[str, Any]]) -> None:
     # Statistik-Metriken anzeigen
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("→ Spam", stats["zu_spam"])
+        st.metric("→ Sehr Unsicher", stats["zu_sehr_unsicher"])
     with col2:
         st.metric("→ Sicher", stats["zu_sicher"])
     with col3:
@@ -93,10 +93,10 @@ def calculate_verschiebung_stats(verschiebungen: List[Dict[str, Any]]) -> Dict[s
     Berechnet Statistiken über Verschiebungen (nur einmal).
     
     Returns:
-        Dict mit zu_spam, zu_sicher, zu_unsicher, korrekturen
+        Dict mit zu_sehr_unsicher, zu_sicher, zu_unsicher, korrekturen
     """
     return {
-        "zu_spam": sum(1 for v in verschiebungen if v.get("nach", "").lower() == "spam"),
+        "zu_sehr_unsicher": sum(1 for v in verschiebungen if v.get("nach", "").lower() == "sehr unsicher"),
         "zu_sicher": sum(1 for v in verschiebungen if v.get("nach", "").lower() == "sicher"),
         "zu_unsicher": sum(1 for v in verschiebungen if v.get("nach", "").lower() == "unsicher"),
         "korrekturen": sum(1 for v in verschiebungen if v.get("korrektur"))
@@ -113,8 +113,8 @@ def render_ki_hinweis(verschiebungen: List[Dict[str, Any]]) -> None:
     stats = calculate_verschiebung_stats(verschiebungen)
     
     hinweis_teile = []
-    if stats["zu_spam"] > 0:
-        hinweis_teile.append(f"{stats['zu_spam']}× → Spam")
+    if stats["zu_sehr_unsicher"] > 0:
+        hinweis_teile.append(f"{stats['zu_sehr_unsicher']}× → Sehr Unsicher")
     if stats["zu_sicher"] > 0:
         hinweis_teile.append(f"{stats['zu_sicher']}× → Sicher")
     if stats["zu_unsicher"] > 0:

@@ -12,8 +12,41 @@ from collections import Counter
 # pdfplumber "stroke color" Warnungen unterdrücken (harmlos bei bestimmten PDFs)
 warnings.filterwarnings("ignore", message=".*stroke color.*")
 
-from core.config.config import PATTERN, INTERNAL_COLUMNS, get_config, get_clean_string
+from core.config.config import PATTERN, INTERNAL_COLUMNS, get_config, get_clean_string, VALID_ARTICLE_PREFIXES, BAD_PREFIXES
 from core.analysis.analyzers import check_plausibility, analyze_context
+
+
+def _get_prefix_status(artikelnummer: str) -> str:
+    """
+    Bestimmt den Präfix-Status einer Artikelnummer.
+    
+    Returns:
+        'valid' - Präfix ist in VALID_ARTICLE_PREFIXES
+        'invalid' - Präfix ist in BAD_PREFIXES (Tel, Fax, etc.)
+        'unknown' - Präfix ist weder valid noch invalid
+    """
+    # Extrahiere das Präfix (erster Teil vor dem Leerzeichen)
+    parts = artikelnummer.split()
+    if not parts:
+        return 'unknown'
+    
+    prefix = parts[0].upper()
+    
+    # Check gegen BAD_PREFIXES (z.B. TEL, FAX, HRB)
+    for bad in BAD_PREFIXES:
+        if prefix.startswith(bad.upper()):
+            return 'invalid'
+    
+    # Check gegen VALID_ARTICLE_PREFIXES
+    if prefix in [p.upper() for p in VALID_ARTICLE_PREFIXES]:
+        return 'valid'
+    
+    # Numerische Präfixe (2-stellig) prüfen
+    if prefix.isdigit() and len(prefix) == 2:
+        if prefix in VALID_ARTICLE_PREFIXES:
+            return 'valid'
+    
+    return 'unknown'
 
 # Bereinigt den Text von problematischen Whitespace-Zeichen
 def clean_text(text: str) -> str:
@@ -61,7 +94,7 @@ def extract_matches_from_text(text: str, page_num: int, source: str, config: dic
 
 # Hauptfunktion zur Analyse eines PDFs und Extraktion der Artikelnummern
 # Input: Streamlit UploadedFile Objekt ist eine Funktion die in Streamlit genutzt werden kann
-# Output: Drei DataFrames (Sicher, Unsicher, Spam)
+# Output: Drei DataFrames (Sicher, Unsicher, Sehr Unsicher)
 def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     config = get_config()
     bytes_data = uploaded_file.getvalue()
@@ -173,16 +206,26 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
         # Bestimme Status basierend auf mehreren Faktoren
         status = "Unsicher"
         
-        # Check 1: Häufigkeit (Spam wenn >10 Mal gefunden)
+        # Präfix-Status ermitteln (Soft-Klassifikation)
+        prefix_status = _get_prefix_status(item["Nummer"])
+        
+        # Check 1: Häufigkeit (Sehr Unsicher wenn >10 Mal gefunden)
         if counts[item["Clean"]] > 10:
-            status = "Spam"
-        # Check 2: Kontext-basierter Spam
-        # also wenn in der Funktion analyze_context als "Spam_Candidate" markiert wurde
-        elif all(s == "Spam_Candidate" for s in context_status_map.get(item["Clean"], [])):
-            status = "Spam"
-        # Check 3: Cross-Validation (Sicher wenn in beiden Engines gefunden)
+            status = "Sehr Unsicher"
+        # Check 2: Ungültiger Präfix (BAD_PREFIXES wie TEL, FAX) -> Sehr Unsicher
+        elif prefix_status == 'invalid':
+            status = "Sehr Unsicher"
+        # Check 3: Kontext-basiert (Sehr Unsicher wenn alle Kontexte negativ)
+        elif all(s == "Sehr_Unsicher_Candidate" for s in context_status_map.get(item["Clean"], [])):
+            status = "Sehr Unsicher"
+        # Check 4: Cross-Validation + valider/unbekannter Präfix
         elif item["Clean"] in plumber_set and item["Clean"] in fitz_set:
-            status = "Sicher"
+            # Cross-Match: Sicher nur wenn Präfix valid oder unknown
+            if prefix_status == 'valid':
+                status = "Sicher"
+            else:
+                # Cross-Match aber unbekannter Präfix -> bleibt Unsicher
+                status = "Unsicher"
         
         final_data.append({
             "Seite": item["Seite"],
@@ -198,6 +241,6 @@ def analyze_pdf(uploaded_file) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     # Aufteilen in drei DataFrames für die UI 
     df_sicher = df[df['Status'] == 'Sicher'][INTERNAL_COLUMNS].reset_index(drop=True)
     df_unsicher = df[df['Status'] == 'Unsicher'][INTERNAL_COLUMNS].reset_index(drop=True)
-    df_spam = df[df['Status'] == 'Spam'][INTERNAL_COLUMNS].reset_index(drop=True)
+    df_sehr_unsicher = df[df['Status'] == 'Sehr Unsicher'][INTERNAL_COLUMNS].reset_index(drop=True)
     
-    return df_sicher, df_unsicher, df_spam
+    return df_sicher, df_unsicher, df_sehr_unsicher

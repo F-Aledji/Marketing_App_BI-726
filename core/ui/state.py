@@ -21,12 +21,12 @@ def save_analysis_results(
     # KI-bereinigte DataFrames
     df_sicher = review_result.df_sicher
     df_unsicher = review_result.df_unsicher
-    df_spam = review_result.df_spam
+    df_sehr_unsicher = review_result.df_sehr_unsicher
     
     # Aktuelle Daten speichern
     st.session_state["data_sicher"] = df_sicher
     st.session_state["data_unsicher"] = df_unsicher
-    st.session_state["data_spam"] = df_spam
+    st.session_state["data_sehr_unsicher"] = df_sehr_unsicher
     st.session_state["datei_name"] = dateiname
     st.session_state["analyse_done"] = True
     
@@ -37,7 +37,7 @@ def save_analysis_results(
     # Original-Daten für Excel-Export speichern
     st.session_state["data_sicher_original"] = review_result.df_sicher_original
     st.session_state["data_unsicher_original"] = review_result.df_unsicher_original
-    st.session_state["data_spam_original"] = review_result.df_spam_original
+    st.session_state["data_sehr_unsicher_original"] = review_result.df_sehr_unsicher_original
 
 
 def save_analysis_error(fehler_msg: str) -> None:
@@ -57,12 +57,12 @@ def get_display_dataframes() -> tuple:
     Lädt die Display-DataFrames aus dem Session State.
     
     Returns:
-        Tuple (df_sicher, df_unsicher, df_spam)
+        Tuple (df_sicher, df_unsicher, df_sehr_unsicher)
     """
     from core.config.config import prepare_for_display
     
     return (
         prepare_for_display(st.session_state.get("data_sicher", pd.DataFrame())),
         prepare_for_display(st.session_state.get("data_unsicher", pd.DataFrame())),
-        prepare_for_display(st.session_state.get("data_spam", pd.DataFrame()))
+        prepare_for_display(st.session_state.get("data_sehr_unsicher", pd.DataFrame()))
     )

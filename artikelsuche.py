@@ -19,7 +19,7 @@ from core.ai.providers import get_active_provider_name
 
 # UI-Module
 from core.ui.sidebar import show_sidebar
-from core.ui.state import save_analysis_results, save_analysis_error, get_display_dataframes
+from core.ui.state import save_analysis_results, get_display_dataframes
 from core.ui.tabs import render_data_tab, render_ki_verschiebungen_tab, render_ki_hinweis
 
 # =============================================================================
@@ -36,8 +36,8 @@ def _run_analysis(uploaded_file) -> None:
             st.warning("⚠️ **Achtung:** Gescannte Datei erkannt. Ergebnisse könnten unvollständig sein.")
         
         # PDF-Extraktion
-        df_sicher, df_unsicher, df_spam = analyze_pdf(uploaded_file)
-        total = len(df_sicher) + len(df_unsicher) + len(df_spam)
+        df_sicher, df_unsicher, df_sehr_unsicher = analyze_pdf(uploaded_file)
+        total = len(df_sicher) + len(df_unsicher) + len(df_sehr_unsicher)
         
         if total == 0:
             st.warning("Nichts gefunden.")
@@ -57,7 +57,7 @@ def _run_analysis(uploaded_file) -> None:
     
     status_text.caption(f"✨ {get_active_provider_name()} startet Analyse...")
     review_result = review_dataframes(
-        df_sicher, df_unsicher, df_spam,
+        df_sicher, df_unsicher, df_sehr_unsicher,
         progress_callback=update_progress,
         dateiname=uploaded_file.name
     )
@@ -65,17 +65,24 @@ def _run_analysis(uploaded_file) -> None:
     progress_container.empty()
     status_text.empty()
     
-    # Ergebnis speichern
+    # Ergebnis speichern - auch bei KI-Fehler die Original-Daten anzeigen
     if review_result.erfolg:
         save_analysis_results(
             review_result,
             uploaded_file.name
         )
     else:
-        save_analysis_error(review_result.fehler_msg)
+        # Bei KI-Fehler: Original-Daten trotzdem speichern und anzeigen
+        save_analysis_results(
+            review_result,  # Enthält Original-Daten bei Fehler
+            uploaded_file.name
+        )
+        # Fehler-Flag für Warnung setzen
+        st.session_state["ki_erfolg"] = False
+        st.session_state["ki_fehler"] = review_result.fehler_msg
 
 
-def _render_export_section(display_sicher, display_unsicher, display_spam) -> None:
+def _render_export_section(display_sicher, display_unsicher, display_sehr_unsicher) -> None:
     """Rendert den Excel-Export Bereich."""
     st.divider()
     st.subheader("📥 Excel Export")
@@ -83,10 +90,10 @@ def _render_export_section(display_sicher, display_unsicher, display_spam) -> No
     excel_data = export_to_excel_with_logs(
         prepare_for_display(st.session_state.get("data_sicher_original", display_sicher)),
         prepare_for_display(st.session_state.get("data_unsicher_original", display_unsicher)),
-        prepare_for_display(st.session_state.get("data_spam_original", display_spam)),
+        prepare_for_display(st.session_state.get("data_sehr_unsicher_original", display_sehr_unsicher)),
         display_sicher,
         display_unsicher,
-        display_spam,
+        display_sehr_unsicher,
         st.session_state.get("ki_verschiebungen", []),
         st.session_state.get("datei_name", "export")
     )
@@ -113,14 +120,14 @@ def _render_results() -> None:
     with col2:
         st.metric("🟡 Unsicher", len(st.session_state.get("data_unsicher", [])))
     with col3:
-        st.metric("🔴 Spam", len(st.session_state.get("data_spam", [])))
+        st.metric("� Sehr Unsicher", len(st.session_state.get("data_sehr_unsicher", [])))
     
     # Display-Daten und Config
-    display_sicher, display_unsicher, display_spam = get_display_dataframes()
+    display_sicher, display_unsicher, display_sehr_unsicher = get_display_dataframes()
     column_config = get_column_config()
     
     # Tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["🟢 Sicher", "🟡 Unsicher", "🔴 Spam", "✨ KI Verschoben"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🟢 Sicher", "🟡 Unsicher", "🟠 Sehr Unsicher", "✨ KI Verschoben"])
     
     with tab1:
         render_data_tab("Sichere Treffer", "Von beiden Engines gefunden und KI-geprüft.", display_sicher, column_config)
@@ -129,13 +136,13 @@ def _render_results() -> None:
         render_data_tab("Unsichere Treffer", "Nur von einer Engine gefunden. Bitte prüfen.", display_unsicher, column_config)
     
     with tab3:
-        render_data_tab("Spam / Falsch-Positive", "Als Spam erkannt (Telefon, HRB, etc.).", display_spam, column_config)
+        render_data_tab("Sehr Unsichere Treffer", "Verdächtig (Telefon, HRB, etc.). Manuelle Prüfung empfohlen.", display_sehr_unsicher, column_config)
     
     with tab4:
         render_ki_verschiebungen_tab(ki_verschiebungen)
     
     # Export
-    _render_export_section(display_sicher, display_unsicher, display_spam)
+    _render_export_section(display_sicher, display_unsicher, display_sehr_unsicher)
 
 
 # =============================================================================
@@ -154,9 +161,10 @@ uploaded_file = st.file_uploader("PDF hier reinziehen", type=["pdf"])
 if uploaded_file and st.button("🔍 Suche starten", type="primary"):
     _run_analysis(uploaded_file)
 
-# --- FEHLERANZEIGE ---
-if st.session_state.get("ki_erfolg") == False:
-    st.error(f"❌ {st.session_state.get('ki_fehler', 'Unbekannter Fehler bei der KI-Analyse')}")
+# --- FEHLERANZEIGE (Warnung bei KI-Fehler) ---
+if st.session_state.get("ki_erfolg") == False and st.session_state.get("analyse_done"):
+    st.warning(f"⚠️ **KI-Analyse fehlgeschlagen:** {st.session_state.get('ki_fehler', 'Unbekannter Fehler')}\n\n"
+               "Die Daten werden ungeprüft angezeigt. Bitte führen Sie eine manuelle Prüfung durch.")
 
 # --- ERGEBNIS-COCKPIT ---
 if st.session_state.get("analyse_done", False):

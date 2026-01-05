@@ -158,8 +158,8 @@ class OpenAIProvider(AIProvider):
 # PROVIDER AUSWAHL
 # =============================================================================
 
-ACTIVE_PROVIDER = GeminiProvider()
-#ACTIVE_PROVIDER = OpenAIProvider()
+#ACTIVE_PROVIDER = GeminiProvider()
+ACTIVE_PROVIDER = OpenAIProvider()
 
 
 def get_active_provider_name() -> str:

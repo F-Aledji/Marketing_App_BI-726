@@ -18,18 +18,6 @@ PATTERN_ALPHA = r"(?<![A-Z])([A-Z]{2,4})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})
 PATTERN_NUMERIC = r"(?<!\d)(\d{2})[\s._\u00A0]+(\d{3})[\s._\u00A0]+(\d{2})(?!\d)"
 PATTERN = rf"(?i)(?:{PATTERN_ALPHA})|(?:{PATTERN_NUMERIC})"
 
-# =============================================================================
-# GÜLTIGE ARTIKELNUMMER-PRÄFIXE
-# =============================================================================
-# WICHTIG: Hier die gültigen Präfixe eurer Artikelnummern eintragen!
-# Diese werden der KI mitgeteilt, um bessere Entscheidungen zu treffen.
-# Beispiel: ["WS", "94", "AB", "XY"]
-VALID_ARTICLE_PREFIXES = [
-    # <- HIER EURE PRÄFIXE EINTRAGEN, z.B.:
-    # "WS",
-    # "94",
-    # "AB",
-]
 
 # Spalten-Konstanten
 INTERNAL_COLUMNS: List[str] = ["Seite", "Artikelnummer", "Kontext"]
@@ -68,6 +56,34 @@ def get_config() -> dict:
     except Exception as e:
         st.error(f"Fehler beim Laden der Config: {e}")
         return default_config
+
+
+# =============================================================================
+# CONTEXT CONFIG
+# =============================================================================
+
+# Calculate the path to the data directory relative to this file
+# core/config/config.py -> ../../data/context.json
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+CONTEXT_FILE_PATH = os.path.join(BASE_DIR, 'data', 'context.json')
+
+def load_context_data():
+    try:
+        with open(CONTEXT_FILE_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        # Fallback or error handling if file is missing
+        return {}
+
+_context_data = load_context_data()
+
+VALID_ARTICLE_PREFIXES = _context_data.get("valid_article_prefixes", [])
+BAD_PREFIXES = _context_data.get("bad_prefixes", [])
+BAD_NUMBERS = _context_data.get("bad_numbers", [])
+CONTEXT_BAD_WORDS = _context_data.get("context_bad_words", [])
+CONTEXT_GOOD_WORDS = _context_data.get("context_good_words", [])
 
 
 # =============================================================================
